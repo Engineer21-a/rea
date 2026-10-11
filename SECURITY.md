@@ -39,6 +39,12 @@ and heap settings, and deletes the temporary project when the session closes.
 These controls limit accidental persistence and resource use; they do not make
 Ghidra a sandbox. REA does not open or modify user-owned Ghidra projects.
 
+The container image built from `Dockerfile` runs REA as an unprivileged user
+and can be started without network access or capabilities (see
+[Docker and VS Code](docs/docker-vscode.md)). It narrows what REA and its
+providers can reach; it is not a malware sandbox and does not protect the host
+from container escapes or kernel vulnerabilities.
+
 `GHIDRA_INSTALL_DIR` and optional `JAVA_HOME` identify user-managed
 installations. Setup can add those values to detected client configuration only
 after showing its plan and receiving approval. REA does not download, install,

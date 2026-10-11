@@ -1,0 +1,38 @@
+name: Docker image
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - compose.yaml
+      - docker/**
+      - .devcontainer/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: Build and smoke-test the image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Build the runtime image
+        run: docker build -t rea:ci .
+      - name: Build the dev container stage
+        run: docker build --target devcontainer -t rea:devcontainer .
+      - name: Run the MCP smoke test
+        run: node docker/smoke-test.mjs rea:ci

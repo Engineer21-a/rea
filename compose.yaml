@@ -1,0 +1,25 @@
+# Build and run REA in a container; see docs/docker-vscode.md.
+#   WITH_GHIDRA=1 docker compose build
+#   docker compose run --rm -T rea mcp
+services:
+  rea:
+    image: rea:${REA_IMAGE_TAG:-local}
+    build:
+      context: .
+      args:
+        WITH_GHIDRA: ${WITH_GHIDRA:-0}
+        WITH_JDK: ${WITH_JDK:-0}
+        EXTRA_APT_PACKAGES: ${EXTRA_APT_PACKAGES:-}
+    # Static analysis needs no network; set REA_NETWORK=bridge for browser,
+    # ADB, JEB or network-capture work.
+    network_mode: ${REA_NETWORK:-none}
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stdin_open: true
+    working_dir: ${REA_WORKSPACE:-${PWD}}
+    volumes:
+      - ${REA_WORKSPACE:-${PWD}}:${REA_WORKSPACE:-${PWD}}
+    environment:
+      REA_LOG_LEVEL: ${REA_LOG_LEVEL:-warn}
+      REA_ANALYSIS_PROVIDER: ${REA_ANALYSIS_PROVIDER:-auto}
+    command: ["mcp"]

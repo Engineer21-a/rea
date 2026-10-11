@@ -1,0 +1,31 @@
+{
+  "name": "REA",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "target": "devcontainer",
+    "args": {
+      "WITH_GHIDRA": "0",
+      "WITH_JDK": "0",
+      "EXTRA_APT_PACKAGES": ""
+    }
+  },
+  "remoteUser": "node",
+  "containerEnv": {
+    "REA_LOG_LEVEL": "warn"
+  },
+  "postCreateCommand": "npm ci && npm run build:cached",
+  "customizations": {
+    "vscode": {
+      "mcp": {
+        "servers": {
+          "rea": {
+            "type": "stdio",
+            "command": "node",
+            "args": ["${containerWorkspaceFolder}/scripts/rea.mjs", "mcp"]
+          }
+        }
+      }
+    }
+  }
+}

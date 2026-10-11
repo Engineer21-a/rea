@@ -1,0 +1,20 @@
+# Keep the build context to the sources npm pack needs.
+.git
+.github
+.husky
+.cache
+.turbo
+.vscode
+.idea
+node_modules
+dist
+skills
+coverage
+.vitest-reports
+test-results.xml
+website/.venv
+website/_site
+website/.wrangler
+_reference
+**/__pycache__
+*.tgz
