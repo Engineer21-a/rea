@@ -67,6 +67,8 @@ export default defineConfig({
           { text: "MCP contracts", link: "/mcp-contracts" },
           { text: "Tool design", link: "/tool-design" },
           { text: "Testing", link: "/testing" },
+          { text: "Audit 2026-10 (Deutsch)", link: "/audit/audit-2026-10_de" },
+          { text: "Audit 2026-10 (Hrvatski)", link: "/audit/audit-2026-10_hr" },
           { text: "Releasing", link: "/releasing" },
         ],
       },

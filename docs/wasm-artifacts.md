@@ -67,5 +67,5 @@ Candidates are caller-selected files; their identity does not imply validation.
 
 Both CLI and MCP use the same typed port and application service. MCP publishes
 SDK-compatible schemas and records Evidence for `get_evidence_bundle` readback.
-See [WABT provenance](../third_party/wabt/README.md) and
+See the WABT provenance in `third_party/wabt/README.md` and
 [testing](testing.md#offline-wasm-artifacts) for real-tool verification.

@@ -248,6 +248,7 @@ Započni s [indeksom dokumentacije](docs/index.md). Točne opcije, preduvjete i 
 - [MCP ugovori](docs/mcp-contracts.md) i [upute za agente](docs/mcp-prompts.md): rezultati alata, sesije i vođena istraživanja.
 - [Katalog alata](docs/mcp-contracts.md#generated-catalog): generirani popis alata, pružatelja i CLI naredbi.
 - [Plan razvoja](docs/roadmap.md): planirani rad i praćenje mogućnosti.
+- Revizija, listopad 2026 ([Deutsch](docs/audit/audit-2026-10_de.md), [Hrvatski](docs/audit/audit-2026-10_hr.md)): nalazi o performansama, sigurnosti, greškama i mrtvom kodu.
 
 Ranjivosti prijavi prema uputama u [SECURITY.md](SECURITY.md).
 

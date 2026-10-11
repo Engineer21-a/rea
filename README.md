@@ -305,6 +305,7 @@ For exact options, prerequisites and result contracts:
 - [MCP contracts](docs/mcp-contracts.md) and [agent prompts](docs/mcp-prompts.md): tool results, sessions and guided investigations.
 - [Tool catalog](docs/mcp-contracts.md#generated-catalog): generated inventory of tools, providers and CLI commands.
 - [Roadmap](docs/roadmap.md): planned work and capability trackers.
+- Audit, October 2026 ([Deutsch](docs/audit/audit-2026-10_de.md), [Hrvatski](docs/audit/audit-2026-10_hr.md)): performance, security, bug and dead-code findings.
 
 Report vulnerabilities through [SECURITY.md](SECURITY.md).
 

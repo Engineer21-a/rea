@@ -247,6 +247,7 @@ Beginne mit dem [Dokumentationsindex](docs/index.md). Genaue Optionen, Vorausset
 - [MCP-Kontrakte](docs/mcp-contracts.md) und [Agenten-Prompts](docs/mcp-prompts.md): Werkzeugergebnisse, Sitzungen und geführte Untersuchungen.
 - [Werkzeugkatalog](docs/mcp-contracts.md#generated-catalog): Beim Build erzeugtes Inventar von Werkzeugen, Providern und CLI-Befehlen.
 - [Roadmap](docs/roadmap.md): Geplante Arbeiten und Fortschrittsübersichten zu Fähigkeiten.
+- Audit Oktober 2026 ([Deutsch](docs/audit/audit-2026-10_de.md), [Hrvatski](docs/audit/audit-2026-10_hr.md)): Befunde zu Performance, Sicherheit, Fehlern und totem Code.
 
 Melde Sicherheitslücken gemäß [SECURITY.md](SECURITY.md).
 
