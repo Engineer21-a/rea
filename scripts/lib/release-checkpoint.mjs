@@ -1,5 +1,6 @@
-import { gt, major, valid } from "semver";
+import { gt, major } from "semver";
 import { z } from "zod";
+import { isExactReleaseVersion } from "./release-notes.mjs";
 
 const shaSchema = z.string().regex(/^[a-f0-9]{40}$/u);
 const versionSchema = z.object({ version: z.string() });
@@ -26,7 +27,7 @@ function conventionalTitle(subject, body) {
 }
 
 function releaseVersion(value, location) {
-  if (valid(value) !== value || value.includes("+")) {
+  if (!isExactReleaseVersion(value)) {
     throw new Error(
       `${location} must contain an exact SemVer without build metadata: ${value}`,
     );

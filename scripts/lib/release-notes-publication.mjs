@@ -1,6 +1,6 @@
-import { valid } from "semver";
 import { z } from "zod";
 import {
+  isExactReleaseVersion,
   releaseInventorySchema,
   verifyInventoryHistory,
   verifyReleaseNotes,
@@ -37,7 +37,7 @@ export async function verifyNotesPublication(run, options) {
   const { version } = z
     .object({ version: z.string() })
     .parse(JSON.parse(await read("package.json")));
-  if (valid(version) !== version || version.includes("+"))
+  if (!isExactReleaseVersion(version))
     throw new Error("Invalid reviewed package version");
   let candidates;
   if (options.pr !== undefined) {
@@ -101,7 +101,7 @@ export async function verifyNotesPublication(run, options) {
         await run("git", ["show", `${source}^1:.release-please-manifest.json`]),
       ),
     )["."];
-  if (valid(baseline) !== baseline || baseline.includes("+"))
+  if (!isExactReleaseVersion(baseline))
     throw new Error("Invalid release baseline version");
   const baselineSha = (
     await run("git", ["rev-parse", `refs/tags/rea-agents-${baseline}^{commit}`])

@@ -500,25 +500,29 @@ it("accepts an exact prerelease version", async () => {
   await expect(verify(f, "6.0.0-rc.1")).resolves.toMatchObject({ stderr: "" });
 });
 
-it.each(["6.01.0", "6.0", "not-a-version", "6.0.0+build"])(
-  "rejects invalid release version %s",
-  async (version) => {
-    const directory = await createTestTempDirectory(
-      "rea-release-invalid-version-",
-    );
-    await expect(
-      verify(
-        { directory, sourceSha: "1".repeat(40) },
-        version,
-        "prepare",
-        "source",
-      ),
-    ).rejects.toMatchObject({
-      code: 1,
-      stderr: expect.stringContaining("must contain an exact SemVer"),
-    });
-  },
-);
+it.each([
+  "6.01.0",
+  "6.0",
+  "not-a-version",
+  "6.0.0+build",
+  "6.0.0-rc.1+build",
+  "v6.0.0",
+])("rejects invalid release version %s", async (version) => {
+  const directory = await createTestTempDirectory(
+    "rea-release-invalid-version-",
+  );
+  await expect(
+    verify(
+      { directory, sourceSha: "1".repeat(40) },
+      version,
+      "prepare",
+      "source",
+    ),
+  ).rejects.toMatchObject({
+    code: 1,
+    stderr: expect.stringContaining("must contain an exact SemVer"),
+  });
+});
 
 it("validates candidate options before inspecting the working directory", async () => {
   const directory = await createTestTempDirectory(

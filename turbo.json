@@ -104,6 +104,23 @@
         "scripts/**",
         "bridge/**",
         "vitest.config.ts",
+        ".oxlintrc.json",
+        ".oxfmtrc.json",
+        "tsconfig.json",
+        "tsconfig.build.json",
+        "install.sh",
+        ".github/**",
+        "README*.md",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "server.json",
+        "release-please-config.json",
+        ".release-please-manifest.json",
+        "Dockerfile",
+        ".agents/skills/reverse-engineer-anything/**",
+        "docs/**",
+        "!docs/public/product-catalog.json",
+        "!docs/verification/managed-conformance-*.json",
         {
           "mode": "dependencyOutputs",
           "globs": [
@@ -140,6 +157,9 @@
         "!docs/verification/managed-conformance-*.json",
         ".agents/skills/reverse-engineer-anything/**",
         "README.md",
+        "README_*.md",
+        "AGENTS.md",
+        ".github/pull_request_template.md",
         {
           "mode": "dependencyOutputs",
           "globs": [

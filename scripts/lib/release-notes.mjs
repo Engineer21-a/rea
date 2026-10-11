@@ -33,6 +33,10 @@ const pullRequest = z.object({
   mergeCommit: z.object({ oid: sha }),
   issues: z.array(issue),
 });
+// semver.valid drops build metadata and a leading "v" or whitespace, so
+// requiring its normalized form to equal the input rejects all of them.
+export const isExactReleaseVersion = (value) => valid(value) === value;
+
 export {
   author as releaseAuthorSchema,
   issue as releaseIssueSchema,
@@ -43,10 +47,7 @@ export const releaseInventorySchema = z.object({
   repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
   version: z
     .string()
-    .refine(
-      (value) => valid(value) === value && !value.includes("+"),
-      "Expected exact release SemVer",
-    ),
+    .refine(isExactReleaseVersion, "Expected exact release SemVer"),
   base: sha,
   target: sha,
   commits: z.array(commit),
