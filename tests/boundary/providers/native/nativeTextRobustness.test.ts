@@ -66,6 +66,60 @@ it("does not leak section fields into command fields under CRLF captures", async
   expect(segment?.fields["time stamp"]).toBeUndefined();
 });
 
+const timedOtoolParse = (output: string) => {
+  const started = performance.now();
+  const parsed = parseOtoolLoadCommands(output);
+  return { parsed, elapsed: performance.now() - started };
+};
+
+it("keeps a long whitespace run inside an install name in linear time", async () => {
+  const fixture = await nativeFixture("otool-load.txt");
+  const baseline = parseOtoolLoadCommands(fixture);
+  const name = `/owned/a${" ".repeat(100_000)}b.dylib`;
+  const { parsed, elapsed } = timedOtoolParse(
+    fixture.replace("/usr/lib/libSystem.B.dylib", name),
+  );
+  expect(elapsed).toBeLessThan(1_000);
+  expect(parsed.dependencies).toEqual([
+    { ...baseline.dependencies[0], path: name },
+  ]);
+  expect(parsed.segments).toEqual(baseline.segments);
+});
+
+it("splits sections after a long newline run in linear time", async () => {
+  const fixture = await nativeFixture("otool-load.txt");
+  const baseline = parseOtoolLoadCommands(fixture);
+  const { parsed, elapsed } = timedOtoolParse(
+    fixture.replace(
+      "    flags 0x0\nSection\n",
+      `    flags 0x0${"\n".repeat(100_000)}Section\n`,
+    ),
+  );
+  expect(elapsed).toBeLessThan(1_000);
+  expect(parsed.commands).toEqual(baseline.commands);
+  expect(parsed.segments).toEqual(baseline.segments);
+});
+
+it("stays linear when a bare CR follows a long field separator", async () => {
+  const fixture = await nativeFixture("otool-load.txt");
+  const baseline = parseOtoolLoadCommands(fixture);
+  const run = " ".repeat(100_000);
+  const { parsed, elapsed } = timedOtoolParse(
+    fixture
+      .replace("/usr/lib/libSystem.B.dylib", `${run}a\rb.dylib`)
+      .replace("     tool LD\n", `     tool${run}L\rD\n`),
+  );
+  expect(elapsed).toBeLessThan(1_000);
+  expect(parsed.segments).toEqual(baseline.segments);
+  expect(parsed.uuid).toBe(baseline.uuid);
+  expect(parsed.dependencies.map(({ kind }) => kind)).toEqual([
+    "LC_LOAD_DYLIB",
+  ]);
+  expect(parsed.builds.map(({ platform, sdk }) => ({ platform, sdk }))).toEqual(
+    [{ platform: "MACOS", sdk: "14.2" }],
+  );
+});
+
 it("accepts a byte-order mark before plist JSON", () => {
   const parsed = parsePlistJson(
     '\uFEFF{"CFBundleIdentifier":"com.owned.fixture"}',

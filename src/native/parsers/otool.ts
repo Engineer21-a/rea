@@ -53,6 +53,17 @@ interface ParsedLoadCommands {
 const normalizeLineEndings = (output: string): string =>
   output.replaceAll("\r\n", "\n");
 
+/**
+ * A `Section` header line. Load-command strings such as dylib names are copied
+ * verbatim from the analyzed binary, so the output can hold long whitespace
+ * runs. Only horizontal whitespace may precede `Section`: a `\s*` that also
+ * matched newlines would rescan a newline run from every start, which is
+ * quadratic. Blank lines before a header stay in the preceding chunk, where
+ * `parseFields` skips them.
+ */
+const SECTION_HEADER = /\n[^\S\n]*Section\n/u;
+const SECTION_START = /(?=\n[^\S\n]*Section\n)/u;
+
 /** Parse stable fields from `otool -l`, preserving unknown command fields. */
 export const parseOtoolLoadCommands = (raw: string) => {
   const output = normalizeLineEndings(raw);
@@ -120,7 +131,7 @@ const createLoadCommandState = (
 const parseLoadCommand = (block: string, state: ParsedLoadCommands): void => {
   const indexText = /^Load command (\d+)/u.exec(block)?.[1];
   if (indexText === undefined) return;
-  const header = block.split(/\n\s*Section\n/u)[0] ?? block;
+  const header = block.split(SECTION_HEADER)[0] ?? block;
   const fields = parseFields(header);
   const kind = stringField(fields, "cmd") ?? "unknown";
   state.commands.push({
@@ -216,7 +227,9 @@ const parseFields = (block: string): Record<string, string | number | null> => {
     // other real key, and it must be matched as a whole: treating `stamp` as a
     // generic suffix would swallow an install name such as
     // `name stamp plugin.dylib`, hiding the dependency path behind `unknown`.
-    const match = /^((?:time stamp)|\S+(?:\s+version)?)\s+(.+)$/u.exec(line);
+    // The value starts at a non-space so a failed match cannot retry every
+    // split of a long whitespace run between the separator and the value.
+    const match = /^((?:time stamp)|\S+(?:\s+version)?)\s+(\S.*)$/u.exec(line);
     if (match?.[1] === undefined || match[2] === undefined) continue;
     const value = match[2].trim();
     fields[match[1]] =
@@ -243,7 +256,7 @@ const parseSegment = (
 
 const parseSections = (block: string): ParsedSection[] =>
   block
-    .split(/(?=\n\s*Section\n)/u)
+    .split(SECTION_START)
     .slice(1)
     .map((sectionBlock) => {
       const fields = parseFields(`Section${sectionBlock}`);
@@ -266,8 +279,8 @@ const parseBuildTools = (
   const tools: Array<{ name: string; version: string }> = [];
   const lines = block.split(/\r?\n/u).map((line) => line.trim());
   for (let index = 0; index < lines.length - 1; index += 1) {
-    const tool = /^tool\s+(.+)$/u.exec(lines[index] ?? "")?.[1];
-    const version = /^version\s+(.+)$/u.exec(lines[index + 1] ?? "")?.[1];
+    const tool = /^tool\s+(\S.*)$/u.exec(lines[index] ?? "")?.[1];
+    const version = /^version\s+(\S.*)$/u.exec(lines[index + 1] ?? "")?.[1];
     if (tool !== undefined && version !== undefined)
       tools.push({ name: tool, version });
   }
@@ -337,8 +350,9 @@ const hexField = (
   return `0x${BigInt(value).toString(16)}`;
 };
 
+/** Starting only at the head of a whitespace run keeps the strip linear. */
 const stripOffsetSuffix = (value: string | null): string =>
-  value?.replace(/\s+\(offset\s+\d+\)$/u, "") ?? "unknown";
+  value?.replace(/(?<!\s)\s+\(offset\s+\d+\)$/u, "") ?? "unknown";
 
 const sectionAlignment = (raw: string | null): number | null => {
   if (raw === null) return null;

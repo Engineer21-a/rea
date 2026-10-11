@@ -45,9 +45,7 @@ export const ghidraJavaLaunch = async (options: {
   for (const line of configuredEnvironment.stdout.split(/\r?\n/u)) {
     if (line === "") continue;
     const separator = line.indexOf("=");
-    const sourceKey = line.slice(0, separator);
-    const key =
-      options.platform === "win32" ? sourceKey.toUpperCase() : sourceKey;
+    const key = line.slice(0, separator);
     if (separator < 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(key))
       throw new Error(
         `Invalid Ghidra LaunchSupport environment entry: ${line}`,

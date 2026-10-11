@@ -290,16 +290,6 @@ export class GhidraClient {
               sameRegularFileState(metadata, after)
             ) {
               result = { kind: "captured", bytes };
-            } else if (
-              bytes === undefined &&
-              after.isFile() &&
-              after.size > maximumBytes
-            ) {
-              result = {
-                kind: "over-capacity",
-                sourceBytesAtLeast: after.size,
-                maximumBytes,
-              };
             } else {
               throw new RegularFileChangedError(this.#snapshotPath);
             }
