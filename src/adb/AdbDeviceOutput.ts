@@ -210,6 +210,12 @@ const fileNameOf = (devicePath: string): string => {
   return parts[parts.length - 1] ?? devicePath;
 };
 
+const isPlainFileName = (fileName: string): boolean =>
+  fileName !== "" &&
+  fileName !== "." &&
+  fileName !== ".." &&
+  !/[/\\\0]/u.test(fileName);
+
 /**
  * Parse `pm path PACKAGE` lines. The base/split role is derived from the file
  * name (`base.apk`, `split_*.apk`), which is the only signal the output
@@ -233,6 +239,11 @@ export const parsePmPathOutput = (
     }
     const devicePath = match[1]!;
     const fileName = fileNameOf(devicePath);
+    // The device chooses this name and the host uses it as one path component.
+    if (!isPlainFileName(fileName)) {
+      unparsedLines.push(line);
+      continue;
+    }
     paths.push({
       device_path: devicePath,
       file_name: fileName,

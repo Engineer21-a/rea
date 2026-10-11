@@ -1,8 +1,11 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
-import { readFirmwareReport } from "../../../src/firmware/FirmwareFiles.js";
+import {
+  inventoryFirmwareOutput,
+  readFirmwareReport,
+} from "../../../src/firmware/FirmwareFiles.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 
 it.each([
@@ -40,4 +43,25 @@ it("preserves valid Unicode and a literal replacement character in producer JSON
   expect(await readFirmwareReport(path, "inspect_firmware_regions")).toEqual(
     report,
   );
+});
+
+it("orders the extraction inventory by Unicode code point, independent of locale", async () => {
+  const root = await createTestTempDirectory("rea-firmware-inventory-");
+  await mkdir(join(root, "aa"));
+  await mkdir(join(root, "z"));
+  for (const path of ["B", "a", "aa/lib", "z/bin", "\u00e4.bin"])
+    await writeFile(join(root, path), path);
+  const entries = await inventoryFirmwareOutput(
+    root,
+    1024,
+    16,
+    "extract_firmware",
+  );
+  expect(entries.map(({ relativePath }) => relativePath)).toEqual([
+    "B",
+    "a",
+    "aa/lib",
+    "z/bin",
+    "\u00e4.bin",
+  ]);
 });

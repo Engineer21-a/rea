@@ -158,14 +158,10 @@ const materializeArtifactInventoryInScope = async (
           unpacked: true,
         },
       );
-    if (
-      (occurrence.entry_kind !== "file" && occurrence.entry_kind !== "slice") ||
-      occurrence.artifact_id === null ||
-      occurrence.logical_path === "."
-    )
+    if (occurrence.artifact_id === null)
       throw new ArtifactReaderFailure(
         "format",
-        `Selected occurrence is not an extractable regular child file: ${occurrence.logical_path} (${occurrence.occurrence_id})`,
+        `Selected occurrence has no artifact identity to extract: ${occurrence.logical_path} (${occurrence.occurrence_id})`,
       );
     const node = nodes.get(occurrence.artifact_id);
     if (node === undefined)

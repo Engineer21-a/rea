@@ -32,3 +32,19 @@ it("distinguishes raw bytes, empty code and malformed UTF-8", () => {
     new Uint8Array(),
   );
 });
+it("rejects a long interior whitespace run in linear time", () => {
+  const text = `00${" ".repeat(1_000_000)}zz`;
+  const started = performance.now();
+  expect(() => decodeEvmBytecodeCarrier(Buffer.from(text), "hex")).toThrow(
+    EvmCarrierFailure,
+  );
+  expect(performance.now() - started).toBeLessThan(1_000);
+  expect(
+    Buffer.from(
+      decodeEvmBytecodeCarrier(
+        Buffer.from(`${" \t".repeat(500_000)}0x6000${"\r\n".repeat(500_000)}`),
+        "hex",
+      ),
+    ).toString("hex"),
+  ).toBe("6000");
+});

@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { access, lstat, mkdir, rm, stat, writeFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import type {
   ExecutionOptions,
@@ -1286,6 +1286,14 @@ export class AdbProvider {
       }
       seenFileNames.add(entry.file_name);
       const localPath = join(packageDirectory, entry.file_name);
+      if (dirname(localPath) !== packageDirectory) {
+        failures.push({
+          device_path: entry.device_path,
+          stage: "pull",
+          message: `File name ${entry.file_name} does not name a file inside the package directory; refusing to pull`,
+        });
+        continue;
+      }
       const pulled = await runAdb(
         operation,
         serial,
@@ -2022,7 +2030,21 @@ export class AdbProvider {
           "adb bugreport did not report an archive path; the build may use an unsupported format",
         ),
       );
+    // Older devices stream the device-written text report on stdout, so the
+    // completion line is device-influenced; accept only a direct child file.
+    if (dirname(resolve(reportedPath)) !== directory.value)
+      return err(
+        new AnalysisProtocolError(
+          `adb bugreport reported a path outside the requested output directory: ${reportedPath}`,
+        ),
+      );
     try {
+      if (!(await lstat(reportedPath)).isFile())
+        return err(
+          new AnalysisProtocolError(
+            `adb bugreport reported a path that is not a regular file: ${reportedPath}`,
+          ),
+        );
       const digest = await hashAdbFile(reportedPath, operation, signal);
       return ok(
         createAnalysisExecution(

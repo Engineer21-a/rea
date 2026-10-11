@@ -23,6 +23,19 @@ import { SafeOutputTree } from "../../../src/artifacts/SafeOutputTree.js";
 import { SafeOutputTreeCreationFailure } from "../../../src/artifacts/SafeOutputTreeCreationFailure.js";
 import { ArtifactReaderFailure } from "../../../src/artifacts/ArtifactReader.js";
 
+const listedDirectories = vi.hoisted(() => ({
+  paths: undefined as unknown[] | undefined,
+}));
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  const readdir = (async (...args: Parameters<typeof actual.readdir>) => {
+    listedDirectories.paths?.push(args[0]);
+    return actual.readdir(...args);
+  }) as typeof actual.readdir;
+  return { ...actual, readdir };
+});
+
 describe("safe artifact output cleanup", () => {
   it.skipIf(process.platform !== "linux")(
     "closes the parent descriptor when the output disappears before commit",
@@ -454,6 +467,64 @@ describe("safe artifact output tree", () => {
     expect(await readFile(join(output, "nested", "file.txt"), "utf8")).toBe(
       "windows output",
     );
+  });
+});
+
+describe("safe artifact output nested directories", () => {
+  it("reuses owned nested directories without listing them and still refuses unowned or case-colliding ones", async () => {
+    const parent = await createTestTempDirectory("rea-safe-output-nested-");
+    await writeFile(join(parent, "case-probe"), "lower");
+    await writeFile(join(parent, "CASE-PROBE"), "upper");
+    const caseSensitive =
+      (await readFile(join(parent, "case-probe"), "utf8")) === "lower";
+    const output = join(parent, "published");
+    const tree = await SafeOutputTree.create(output);
+    const write = (path: string) => {
+      const bytes = Buffer.from(path);
+      return tree.write(path, Readable.from(bytes), {
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        bytes: bytes.byteLength,
+      });
+    };
+
+    await write("lib/pkg/one.txt");
+    const listed: unknown[] = [];
+    listedDirectories.paths = listed;
+    try {
+      await write("lib/pkg/two.txt");
+      await write("lib/other/three.txt");
+    } finally {
+      listedDirectories.paths = undefined;
+    }
+    expect(listed).toEqual([]);
+    expect(await readFile(join(output, "lib/pkg/two.txt"), "utf8")).toBe(
+      "lib/pkg/two.txt",
+    );
+
+    await mkdir(join(output, "foreign"));
+    listedDirectories.paths = listed;
+    try {
+      await expect(write("foreign/four.txt")).rejects.toMatchObject({
+        reason: "path",
+        message: `Extraction directory identity changed: ${join(output, "foreign")}`,
+      });
+    } finally {
+      listedDirectories.paths = undefined;
+    }
+    expect(listed).toEqual([output]);
+
+    if (caseSensitive) {
+      await write("LIB/five.txt");
+      expect(await readFile(join(output, "LIB/five.txt"), "utf8")).toBe(
+        "LIB/five.txt",
+      );
+    } else
+      await expect(write("LIB/five.txt")).rejects.toMatchObject({
+        reason: "path",
+        message:
+          "Destination filesystem cannot store both LIB and lib; inventory retains both logical names.",
+      });
+    await rm(parent, { recursive: true, force: true });
   });
 });
 

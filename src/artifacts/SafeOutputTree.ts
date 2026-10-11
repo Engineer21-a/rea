@@ -433,9 +433,11 @@ export class SafeOutputTree {
         created = false;
       });
       if (!created) {
-        await throwIfDestinationCaseCollision(parent.path, logicalPath);
         const identity = this.#nestedDirectories.get(current);
-        if (identity === undefined) throw replacedDirectory(current);
+        if (identity === undefined) {
+          await throwIfDestinationCaseCollision(parent.path, logicalPath);
+          throw replacedDirectory(current);
+        }
         await assertPathIdentity(current, identity);
       } else {
         try {

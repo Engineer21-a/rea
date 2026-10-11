@@ -239,4 +239,25 @@ describe("parsePmPathOutput", () => {
       role: "unknown",
     });
   });
+
+  it("refuses device paths whose final segment is not a plain host file name", () => {
+    const lines = [
+      "package:/data/app/x/..",
+      "package:/data/app/x/.",
+      "package:/data/app/x/",
+      "package:/data/app/x/..\\evil.apk",
+      "package:/data/app/x/a\0.apk",
+    ];
+    const { paths, unparsedLines } = parsePmPathOutput(
+      [...lines, "package:/data/app/x/base.apk", ""].join("\n"),
+    );
+    expect(unparsedLines).toEqual(lines);
+    expect(paths).toEqual([
+      {
+        device_path: "/data/app/x/base.apk",
+        file_name: "base.apk",
+        role: "base",
+      },
+    ]);
+  });
 });

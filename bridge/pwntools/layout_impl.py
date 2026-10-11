@@ -69,11 +69,10 @@ def dynamic_name_reference(tags, offset, image, content):
     if not 0 <= offset < sizes[0]:
         raise LayoutFailure("format", f"ELF dependency name offset {offset} lies outside declared DT_STRSZ {sizes[0]}.")
     offsets = set()
-    if len(starts) == 1 and len(sizes) == 1:
-        for segment in image.iter_segments_by_type("PT_LOAD"):
-            h = segment.header
-            if starts[0] >= h.p_vaddr and starts[0] + sizes[0] <= h.p_vaddr + h.p_filesz:
-                offsets.add(h.p_offset + starts[0] - h.p_vaddr)
+    for segment in image.iter_segments_by_type("PT_LOAD"):
+        h = segment.header
+        if starts[0] >= h.p_vaddr and starts[0] + sizes[0] <= h.p_vaddr + h.p_filesz:
+            offsets.add(h.p_offset + starts[0] - h.p_vaddr)
     if len(offsets) != 1:
         raise LayoutFailure("unsupported-target", "Dynamic string table lacks a unique file-backed mapping: " + repr({"DT_STRTAB": starts, "DT_STRSZ": sizes, "candidate_file_offsets": sorted(offsets)}))
     return name_in_table(None, offsets.pop(), sizes[0], offset, content)

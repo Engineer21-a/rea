@@ -17,6 +17,7 @@ import {
   AnalysisOutputError,
 } from "../domain/analysisErrorCore.js";
 import type { FirmwareRequest } from "../domain/firmware/firmwareAnalysis.js";
+import { compareUnicodeCodePoints } from "../domain/unicodeCodePointOrder.js";
 import { readBoundedFileBytes } from "../process/BoundedFileBytes.js";
 import { FIRMWARE_LIMITS } from "./FirmwareRelease.js";
 
@@ -261,7 +262,9 @@ export const inventoryFirmwareOutput = async (
       });
     }
   }
-  return entries.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return entries.sort((a, b) =>
+    compareUnicodeCodePoints(a.relativePath, b.relativePath),
+  );
 };
 
 /** Bind producer paths to the selected input or private extraction tree. */

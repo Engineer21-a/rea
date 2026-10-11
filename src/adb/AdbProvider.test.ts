@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readFile,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
@@ -281,6 +282,29 @@ it("refuses to reuse an existing package output directory", async () => {
     code: "unreadable_output",
   });
   expect(result.error.message).toContain("already exists");
+});
+
+it("refuses a pm path whose file name would leave the package directory", async () => {
+  const { binary, root } = await writeAdbStub((root) =>
+    pullStub(
+      "'package:/data/app/z/base.apk' 'package:/data/app/z/..'",
+      `  printf 'x' > "$5"; printf '%s\\n' "$5" >> "${join(root, "pulled")}"`,
+    ),
+  );
+  const result = await providerOver(binary).execute({
+    operation: "pull_adb_package",
+    input: {
+      serial: "emulator-5554",
+      package: "com.example",
+      output_directory: join(root, "out"),
+    },
+  });
+  if (result.ok) throw new Error("expected a refusal");
+  expect(result.error).toMatchObject({
+    _tag: "AnalysisProtocolError",
+    message: "pm path reported an unrecognized line: package:/data/app/z/..",
+  });
+  await expect(readFile(join(root, "pulled"))).rejects.toThrow();
 });
 
 it("reports an uninstalled package from empty pm path output", async () => {
@@ -903,6 +927,47 @@ exit 1`,
     sha256: digest,
     adb_reported_path: join(root, "bugreport test.zip"),
   });
+});
+
+it("refuses a bugreport path that is not a regular file directly in the output directory", async () => {
+  const { binary, root } = await writeAdbStub(
+    (root) => `if [ "$1" = "version" ]; then ${VERSION_BLOCK}; exit 0; fi
+if [ "$1" = "-s" ] && [ "$3" = "bugreport" ]; then
+  printf 'Bug report copied to %s\\n' "$(cat "${join(root, "reported")}")"
+  exit 0
+fi
+exit 1`,
+  );
+  const output = join(root, "reports");
+  const outside = join(root, "host-secret");
+  await writeFile(outside, "host bytes");
+  await mkdir(output);
+  await symlink(outside, join(output, "linked.zip"));
+  for (const [reported, message] of [
+    [
+      outside,
+      `adb bugreport reported a path outside the requested output directory: ${outside}`,
+    ],
+    [
+      join(output, "nested", "bugreport.zip"),
+      `adb bugreport reported a path outside the requested output directory: ${join(output, "nested", "bugreport.zip")}`,
+    ],
+    [
+      join(output, "linked.zip"),
+      `adb bugreport reported a path that is not a regular file: ${join(output, "linked.zip")}`,
+    ],
+  ] as const) {
+    await writeFile(join(root, "reported"), reported);
+    const result = await providerOver(binary).execute({
+      operation: "collect_adb_bugreport",
+      input: { serial: "emulator-5554", output_directory: output },
+    });
+    if (result.ok) throw new Error("expected a refusal");
+    expect(result.error).toMatchObject({
+      _tag: "AnalysisProtocolError",
+      message,
+    });
+  }
 });
 
 it("quotes caller text before adb joins the remote shell command", async () => {
