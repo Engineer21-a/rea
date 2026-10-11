@@ -17,6 +17,8 @@ export default defineConfig({
         text: "Getting started",
         items: [
           { text: "Installation and setup", link: "/installation" },
+          { text: "Docker and VS Code", link: "/docker-vscode" },
+          { text: "Configuration reference", link: "/configuration" },
           { text: "CLI and Evidence", link: "/cli" },
           { text: "Agent prompts", link: "/mcp-prompts" },
           { text: "Roadmap", link: "/roadmap" },
@@ -70,10 +72,7 @@ export default defineConfig({
       },
     ],
     search: { provider: "local" },
-    socialLinks: [
-      { icon: "github", link: "https://github.com/morluto/rea" },
-      { icon: "discord", link: "https://discord.gg/GkcryMnJDM" },
-    ],
+    socialLinks: [{ icon: "github", link: "https://github.com/morluto/rea" }],
     editLink: {
       pattern: "https://github.com/morluto/rea/edit/main/docs/:path",
     },

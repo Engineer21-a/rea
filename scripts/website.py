@@ -214,7 +214,7 @@ def main():
     create.add_argument("--description", required=True)
     translations = commands.add_parser("translations", help="Maintain gettext catalogs")
     translations.add_argument("action", choices=("extract", "status", "check"))
-    translations.add_argument("--language", help="Check one language, such as zh-CN")
+    translations.add_argument("--language", help="Check one language, such as de")
     translations.add_argument("--strict", action="store_true", help="Fail on missing or fuzzy translations")
     serve = commands.add_parser("serve", help="Prepare and preview the static site")
     serve.add_argument("--port", type=int, default=4173)

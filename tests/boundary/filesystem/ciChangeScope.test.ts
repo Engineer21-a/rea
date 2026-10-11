@@ -90,7 +90,7 @@ it("keeps every translated root README and authored guide on the documentation l
 it("does not charge a documentation PR for unrelated implementation updates on main", async () => {
   const { directory, base } = await fixture();
   await git(directory, ["switch", "-c", "docs/change"]);
-  const head = await change(directory, ["README_zh-TW.md"]);
+  const head = await change(directory, ["README_hr.md"]);
   await git(directory, ["switch", "main"]);
   const advancedBase = await change(directory, ["src/anotherProvider.ts"]);
   expect(advancedBase).not.toBe(base);
@@ -132,7 +132,7 @@ it("retains complete checks when implementation is renamed into documentation", 
 
 it("retains the complete main-push baseline even for documentation", async () => {
   const { directory, base } = await fixture();
-  const head = await change(directory, ["README_ja.md"]);
+  const head = await change(directory, ["README_de.md"]);
   expect(await classify(directory, base, head, "push")).toMatchObject({
     code: true,
     package: true,
@@ -215,11 +215,11 @@ it.each([
   ],
   ["website/src/index.ts", { code: false, website: true, package: false }],
   [
-    "website/locales/zh-CN/messages.po",
+    "website/locales/hr/messages.po",
     { code: false, website: true, package: false },
   ],
   ["scripts/website_i18n.py", { code: false, website: true, package: false }],
-  ["README_ja.md", { code: false, docs: true, website: true, package: false }],
+  ["README_de.md", { code: false, docs: true, website: true, package: false }],
   [
     ".github/workflows/website-pages.yml",
     { code: false, website: true, package: false },
@@ -470,7 +470,7 @@ it.each(["workflow_dispatch", "schedule"])(
 it("honors ci:full for successive PR revisions", async () => {
   const { directory, base } = await fixture();
   const first = await change(directory, ["README.md"]);
-  const second = await change(directory, ["README_ja.md"]);
+  const second = await change(directory, ["README_de.md"]);
   for (const head of [first, second]) {
     expect(
       await classify(directory, base, head, "pull_request", true),

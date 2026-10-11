@@ -169,11 +169,8 @@ describe("canonical product catalog drift", () => {
     temporaryRoots.push(directory);
     const paths = [
       "README.md",
-      "README_zh.md",
-      "README_ja.md",
-      "README_ko.md",
-      "README_ar.md",
-      "website/locales/languages.json",
+      "README_de.md",
+      "README_hr.md",
       "docs/installation.md",
       "AGENTS.md",
       ".github/pull_request_template.md",
@@ -186,7 +183,7 @@ describe("canonical product catalog drift", () => {
     await mkdir(join(directory, "skills/reverse-engineer-anything"), {
       recursive: true,
     });
-    const translatedPath = join(directory, "README_zh.md");
+    const translatedPath = join(directory, "README_hr.md");
     const translated = await readFile(translatedPath, "utf8");
     const catalog = await createProductCatalog(root);
     await expect(documentationFactIssues(directory, catalog)).resolves.toEqual(
@@ -197,17 +194,10 @@ describe("canonical product catalog drift", () => {
         "(docs/installation.md#supported-agents)",
         "(docs/installation.md#missing-agents)",
       ],
+      ["(docs/native-investigation.md)", "(docs/missing.md)"],
       [
-        "https://rea.tools/zh-CN/guides/native/",
-        "https://rea.tools/zh-CN/missing/",
-      ],
-      [
-        "https://rea.tools/zh-CN/guides/native/",
-        "https://rea.tools/zh-TW/guides/native/",
-      ],
-      [
-        "https://rea.tools/zh-CN/guides/native/",
-        "https://rea.tools/zh-CN/guides/native/?other=1",
+        "(docs/native-investigation.md)",
+        "(docs/native-investigation.md?other=1)",
       ],
     ] as const) {
       expect(translated).toContain(original);
@@ -219,7 +209,7 @@ describe("canonical product catalog drift", () => {
       await expect(
         documentationFactIssues(directory, catalog),
       ).resolves.toEqual([
-        "README_zh.md: documentation links differ from README.md",
+        "README_hr.md: documentation links differ from README.md",
       ]);
     }
   });
