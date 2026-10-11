@@ -443,7 +443,7 @@ const registerConfiguredAnalysisTools = (
   );
   registerEvmTools(
     server,
-    options.evmInterface ?? createEvmInterfaceService(environment),
+    options.evmInterface,
     toolLogger,
     recordEvidence,
     withAdmittedAnalysis,
@@ -471,7 +471,7 @@ const registerConfiguredAnalysisTools = (
   );
   registerWebSourceLocationTool(
     server,
-    options.webSourceLocation ?? createWebSourceLocationService(environment),
+    options.webSourceLocation,
     toolLogger,
     recordEvidence,
     withAdmittedAnalysis,
@@ -492,10 +492,7 @@ const registerConfiguredAnalysisTools = (
   );
   registerJavaScriptRecoveryTool(
     server,
-    new JavaScriptRecoveryService(
-      options.javascriptRecovery ??
-        createJavaScriptRecoveryProvider(environment),
-    ),
+    new JavaScriptRecoveryService(options.javascriptRecovery),
     toolLogger,
     recordEvidence,
     withAdmittedAnalysis,
@@ -532,11 +529,18 @@ interface ServerToolContext extends ReturnType<typeof createSessionRecorders> {
   readonly artifactResources: ArtifactResourceScope;
   readonly server: EvidenceMcpServer;
   readonly session: BinarySessionPort | undefined;
-  readonly options: CreateServerOptions;
+  readonly options: SelectedServerOptions;
   readonly environment: Readonly<NodeJS.ProcessEnv>;
   readonly logger: Logger;
   readonly withAdmittedAnalysis: WithAdmittedAnalysis;
 }
+
+/** Options after createServer selected the providers it owns and closes. */
+type SelectedServerOptions = CreateServerOptions & {
+  readonly evmInterface: EvmInterfaceService;
+  readonly webSourceLocation: WebSourceLocationService;
+  readonly javascriptRecovery: JavaScriptRecoveryPort;
+};
 
 const registerBinaryAnalysisTools = ({
   server,

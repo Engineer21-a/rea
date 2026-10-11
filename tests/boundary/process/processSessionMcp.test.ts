@@ -8,6 +8,8 @@ import { afterEach, expect, it } from "vitest";
 import { z } from "zod";
 
 import { toolContract } from "../../../src/contracts/toolContracts.js";
+import { parseEvidence } from "../../../src/domain/evidence.js";
+import { parseProcessCapture } from "../../../src/domain/process/processCaptureParsing.js";
 import {
   createCacheProvider,
   createTestBinarySession,
@@ -136,5 +138,45 @@ itWithCaptureCapability(
         domain: "process-network",
       }),
     );
+  },
+);
+
+itWithCaptureCapability(
+  "launches MCP captures with the server-owned environment snapshot",
+  async () => {
+    const variable = "REA_TEST_MCP_CAPTURE_ENVIRONMENT";
+    expect(process.env[variable]).toBeUndefined();
+    const session = createTestBinarySession(createCacheProvider([]));
+    const server = createServer(
+      { kind: "session", session },
+      {
+        logger: silentLogger,
+        environment: { ...process.env, [variable]: "server-owned" },
+      },
+    );
+    const mcp = new Client({ name: "process-environment", version: "1.0.0" });
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    resources.push(mcp, server);
+    await server.connect(serverTransport);
+    await mcp.connect(clientTransport);
+
+    const captured = await mcp.callTool({
+      name: "capture_process_scenario",
+      arguments: {
+        executable: process.execPath,
+        arguments: [
+          "-e",
+          `process.stdout.write('ENV=' + (process.env.${variable} ?? 'absent') + '\\n')`,
+        ],
+      },
+    });
+    expect(captured.isError, JSON.stringify(captured.content)).not.toBe(true);
+    const output = parseProcessCapture(
+      parseEvidence(captured.structuredContent).normalized_result,
+    )
+      .frames.map(({ data }) => data)
+      .join("");
+    expect(output).toContain("ENV=server-owned");
   },
 );

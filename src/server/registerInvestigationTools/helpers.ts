@@ -27,17 +27,15 @@ export const evidenceClosure = (
   session: BinarySessionPort,
   seedIds: readonly string[],
 ): Result<string[], EvidenceIntegrityError> => {
-  const records = new Map(
-    session
-      .exportEvidenceBundle()
-      .records.map((evidence) => [evidence.evidence_id, evidence]),
-  );
   const visited = new Set<string>();
   const pending = [...seedIds];
   while (pending.length > 0) {
     const evidenceId = pending.pop();
     if (evidenceId === undefined || visited.has(evidenceId)) continue;
-    const evidence = records.get(evidenceId);
+    // Borrow each linked record so the walk costs only the closure it visits.
+    const evidence =
+      session.evidenceForAnalysis?.(evidenceId) ??
+      session.evidenceById(evidenceId);
     if (evidence === undefined)
       return err(
         new EvidenceIntegrityError(

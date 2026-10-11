@@ -129,7 +129,11 @@ const evidenceCandidates = (
 ): readonly string[] => {
   if (session === undefined) return [];
   const candidates: string[] = [];
-  for (const evidence of session.exportEvidenceBundle().records)
+  // Completion only reads records, so borrow the sealed bundle without a clone.
+  const bundle =
+    session.evidenceBundleForSerialization?.() ??
+    session.exportEvidenceBundle();
+  for (const evidence of bundle.records)
     candidates.push(...evidenceValues(kind, evidence));
   return candidates;
 };

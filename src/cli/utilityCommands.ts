@@ -108,6 +108,12 @@ export const registerUtilityCommands = (
               logger,
             );
           }
+          // The shared option set offers steps, but observation is passive and
+          // its contract rejects them, as the strict MCP input does.
+          if (options.steps !== undefined)
+            return invalidNativeUiScenarioInput(operation, [
+              { path: ["steps"], reason: "unknown_argument" },
+            ]);
           return runProviderAnalysis(args.path, operation, parameters, logger);
         }),
     });

@@ -239,9 +239,11 @@ const registerReconstruction = (
     contract.name,
     toolRegistrationOptions(contract),
     async (input, context) => {
-      const owned = session.exportEvidenceBundle();
+      const bundle =
+        session.evidenceBundleForSerialization?.() ??
+        session.exportEvidenceBundle();
       const computed = await runDerivedOperation(context, contract.name, () =>
-        verifyReconstruction(input.specification, owned),
+        verifyReconstruction(input.specification, bundle),
       );
       if (!computed.ok)
         return server.delivery.toCallToolResult(computed, contract);

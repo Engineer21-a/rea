@@ -1,6 +1,6 @@
 import { z } from "incur";
 import { stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { extname, resolve } from "node:path";
 
 import { resolveCliAnalysisSelector } from "./analysisSelector.js";
 import type { DirectAnalysis } from "../composition/directAnalysis.js";
@@ -178,9 +178,9 @@ const routesToJavaScriptAnalysis = async (
   (await isJavaScriptApplicationPath(path));
 
 const isJavaScriptApplicationPath = async (path: string): Promise<boolean> => {
-  const lower = path.toLowerCase();
-  if (lower.endsWith(".asar")) return true;
-  if (lower.endsWith(".app")) return false;
+  const extension = extname(path).toLowerCase();
+  if (extension === ".asar") return true;
+  if (extension === ".app") return false;
   try {
     return (await stat(path)).isDirectory();
   } catch (cause: unknown) {

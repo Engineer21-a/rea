@@ -56,6 +56,30 @@ it("aggregates comparison Evidence and records an approved runtime gap", async (
   }
 }, 10_000);
 
+it("rejects comparison Evidence whose closure leaves the session ledger", async () => {
+  const { session, server, client } = await connected();
+  const comparison =
+    INVESTIGATION_EXAMPLES.find_changed_behavior.comparisons[0];
+  if (comparison === undefined) throw new Error("missing comparison fixture");
+  // Only one linked side is recorded, so the closure walk reaches an absent ID.
+  expect(session.recordEvidence(FUNCTION_COMPARISON_EXAMPLE.left).ok).toBe(
+    true,
+  );
+  try {
+    const response = await client.callTool({
+      name: "find_changed_behavior",
+      arguments: { comparisons: [comparison] },
+    });
+    expect(response.isError).toBe(true);
+    expect(JSON.stringify(response)).toContain(
+      "Investigation input has a dangling Evidence link",
+    );
+    expect(session.listUnknowns({ domain: "changed-behavior" })).toEqual([]);
+  } finally {
+    await close(session, server, client);
+  }
+});
+
 it("builds exact-address paths with qualified callees and dossier citations", async () => {
   const { session, server, client } = await connected();
   const dossier = dossierWithCallees(["EXTERNAL:0x1000"]);

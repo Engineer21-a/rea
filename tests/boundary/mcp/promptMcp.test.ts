@@ -18,6 +18,11 @@ import {
 } from "../../fixtures/binarySession.js";
 import type { BinarySession } from "../../../src/application/binary/BinarySession.js";
 import { PROMPT_CONTRACTS } from "../../../src/contracts/promptContracts.js";
+import {
+  PROCESS_CAPTURE_RECONSTRUCTION,
+  PROCESS_CAPTURE_REFERENCE,
+  PROCESS_COMPARISON_EVIDENCE,
+} from "../../../src/contracts/investigationExamples.js";
 import { createEvidence } from "../../../src/domain/evidence.js";
 import { createServer } from "../../../src/server/createServer.js";
 import { registerGuidedPrompts } from "../../../src/server/registerPrompts.js";
@@ -246,6 +251,29 @@ describe("guided prompt completion registry", () => {
     expect(result.completion.hasMore).toBe(true);
     expect(result.completion.values).toEqual(
       [...result.completion.values].sort(),
+    );
+  });
+
+  it("completes retained process captures from the session ledger", async () => {
+    const session = fixtureSession();
+    for (const evidence of [
+      PROCESS_CAPTURE_REFERENCE,
+      PROCESS_CAPTURE_RECONSTRUCTION,
+      PROCESS_COMPARISON_EVIDENCE,
+    ])
+      expect(session.recordEvidence(evidence).ok).toBe(true);
+    const client = await connect(createServer({ kind: "session", session }));
+    resources.push(session);
+
+    const result = await client.complete({
+      ref: { type: "ref/prompt", name: "trace_crash" },
+      argument: { name: "capture_evidence_id", value: "" },
+    });
+    expect(result.completion.values).toEqual(
+      [
+        PROCESS_CAPTURE_REFERENCE.evidence_id,
+        PROCESS_CAPTURE_RECONSTRUCTION.evidence_id,
+      ].sort(),
     );
   });
 
