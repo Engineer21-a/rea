@@ -21,8 +21,11 @@
         "servers": {
           "rea": {
             "type": "stdio",
-            "command": "node",
-            "args": ["${containerWorkspaceFolder}/scripts/rea.mjs", "mcp"]
+            "command": "/usr/local/bin/rea-entrypoint",
+            "args": ["mcp"],
+            "env": {
+              "REA_CLI": "${containerWorkspaceFolder}/scripts/rea.mjs"
+            }
           }
         }
       }

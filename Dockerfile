@@ -82,6 +82,7 @@ RUN set -eu; \
     apt-get install -y --no-install-recommends $packages $EXTRA_APT_PACKAGES; \
     rm -rf /var/lib/apt/lists/*
 COPY --from=ghidra /opt/ghidra /opt/ghidra
+COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/rea-entrypoint
 USER node
 
 FROM ${NODE_IMAGE} AS runtime
@@ -105,8 +106,7 @@ RUN --mount=type=secret,id=extra_ca,required=false \
     && rm /tmp/rea-agents.tgz \
     && npm cache clean --force
 COPY --from=ghidra /opt/ghidra /opt/ghidra
-COPY docker/entrypoint.sh /usr/local/bin/rea-entrypoint
-RUN chmod 0755 /usr/local/bin/rea-entrypoint
+COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/rea-entrypoint
 
 # The image's "node" user (uid 1000) runs REA; override with --user as needed.
 USER node

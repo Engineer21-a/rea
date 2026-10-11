@@ -1,15 +1,28 @@
 name: Docker image
 
 on:
+  push:
+    branches: [main]
   pull_request:
+    # npm pack builds the whole package, so every runtime input counts.
     paths:
       - Dockerfile
       - .dockerignore
       - compose.yaml
       - docker/**
       - .devcontainer/**
+      - .nvmrc
+      - .npmrc
       - package.json
       - package-lock.json
+      - tsconfig*.json
+      - turbo.json
+      - src/**
+      - scripts/**
+      - bridge/**
+      - third_party/**
+      - licenses/**
+      - .agents/skills/**
       - .github/workflows/docker.yml
   workflow_dispatch:
 

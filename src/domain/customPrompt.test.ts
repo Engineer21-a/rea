@@ -48,6 +48,33 @@ describe("custom prompt documents", () => {
     ).toContain("Write the report in Hrvatski.");
   });
 
+  it("renders arguments named like Object.prototype members", () => {
+    const parsed = parseCustomPromptDocument(
+      [
+        "---",
+        "name: proto",
+        "title: Proto",
+        "description: Prototype-named arguments.",
+        "arguments:",
+        "  constructor:",
+        "    description: Optional value",
+        "---",
+        "[{{constructor}}]",
+      ].join("\n"),
+      "proto.md",
+    );
+    if (!parsed.ok) throw new Error(parsed.error.reason);
+    expect(renderCustomPrompt(parsed.value, {})).toBe("[]");
+    expect(renderCustomPrompt(parsed.value, { constructor: "x" })).toBe("[x]");
+  });
+
+  it("parses long whitespace inside braces in linear time", () => {
+    const document = `${DOCUMENT}\n{{${" ".repeat(200_000)}`;
+    const started = performance.now();
+    expect(parseCustomPromptDocument(document, "spaces.md").ok).toBe(true);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
   it.each([
     ["no front matter", "Just text", /missing YAML front matter/u],
     [

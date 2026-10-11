@@ -1,6 +1,6 @@
 #!/bin/sh
-# Start REA inside the container image. Explicit settings always win; the
-# defaults below only fill in what the image itself provides.
+# Start REA inside the container image or dev container. Explicit settings
+# always win; the defaults below only fill in what the image itself provides.
 set -eu
 
 # A bundled Ghidra release lives in /opt/ghidra when the image was built with
@@ -22,4 +22,8 @@ if [ -z "${HOME:-}" ] || [ ! -w "${HOME}" ]; then
   export HOME
 fi
 
+# The dev container runs REA from the mounted source checkout instead.
+if [ -n "${REA_CLI:-}" ]; then
+  exec node "$REA_CLI" "$@"
+fi
 exec rea "$@"

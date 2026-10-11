@@ -31,7 +31,8 @@ export interface CustomPromptRejection {
 
 const IDENTIFIER = /^[a-z][a-z0-9_]{0,63}$/u;
 const FRONT_MATTER = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/u;
-const PLACEHOLDER = /\{\{\s*([^{}]*?)\s*\}\}/gu;
+// Linear: the name is trimmed in code, not with competing \s* quantifiers.
+const PLACEHOLDER = /\{\{([^{}]*)\}\}/gu;
 
 const identifier = z
   .string()
@@ -114,7 +115,7 @@ export const parseCustomPromptDocument = (
   const undeclared = [
     ...new Set(
       [...template.matchAll(PLACEHOLDER)]
-        .map((placeholder) => placeholder[1] ?? "")
+        .map((placeholder) => (placeholder[1] ?? "").trim())
         .filter((name) => !declared.has(name)),
     ),
   ];
@@ -155,9 +156,14 @@ export const renderCustomPrompt = (
   definition: CustomPromptDefinition,
   values: Readonly<Record<string, string>>,
 ): string =>
-  definition.template.replace(PLACEHOLDER, (_placeholder, name: string) => {
-    const argument = definition.arguments[name];
-    const value = values[name];
+  definition.template.replace(PLACEHOLDER, (_placeholder, raw: string) => {
+    const name = raw.trim();
+    // Own properties only: "constructor" or "toString" must not resolve to
+    // Object.prototype members.
+    const argument = Object.hasOwn(definition.arguments, name)
+      ? definition.arguments[name]
+      : undefined;
+    const value = Object.hasOwn(values, name) ? values[name] : undefined;
     return value !== undefined && value.trim().length > 0
       ? value
       : (argument?.default ?? "");

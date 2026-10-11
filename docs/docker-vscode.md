@@ -185,8 +185,9 @@ Node.js, git and the build toolchain, installs dependencies, builds REA, and
 registers the built MCP server for VS Code inside the container. Run
 **Dev Containers: Reopen in Container** from the command palette. To include
 Ghidra, set `WITH_GHIDRA` to `"1"` in the file's `build.args` before you open
-it. Inside the dev container, `rea` is not on `PATH`; use
-`node scripts/rea.mjs <command>`.
+it. Inside the dev container, `rea` is not on `PATH`. In a terminal, run
+`REA_CLI=$PWD/scripts/rea.mjs rea-entrypoint <command>`: like the registered MCP
+server, it selects the bundled Ghidra and JDK when the container has them.
 
 ## Updates
 
