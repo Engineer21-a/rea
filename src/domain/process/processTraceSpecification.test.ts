@@ -114,38 +114,6 @@ describe("process trace specification", () => {
     ]);
   });
 
-  it("reports exactly the cycles of the happens-before graph", () => {
-    const chain = (length: number, edges: readonly [number, number][]) =>
-      processTraceSpecificationSchema.safeParse({
-        events: Array.from({ length }, (_, index) => ({
-          id: `e${String(index)}`,
-          source: "lifecycle" as const,
-          exact: { fixture: index },
-          cardinality: { kind: "optional" as const },
-        })),
-        language: {
-          kind: "partial_order",
-          happens_before: edges.map(([before, after]) => ({
-            before: `e${String(before)}`,
-            after: after < 0 ? "missing" : `e${String(after)}`,
-          })),
-        },
-      });
-    const acyclic = (result: ReturnType<typeof chain>) =>
-      result.success ||
-      !result.error.issues.some(
-        ({ message }) => message === "happens-before graph must be acyclic",
-      );
-    const path = (length: number): [number, number][] =>
-      Array.from({ length: length - 1 }, (_, index) => [index, index + 1]);
-
-    expect(acyclic(chain(1_000, path(1_000)))).toBe(true);
-    expect(acyclic(chain(1_000, [...path(1_000), [999, 0]]))).toBe(false);
-    expect(acyclic(chain(3, [...path(3), [1, 1]]))).toBe(false);
-    // An edge to an undeclared event is a reference issue, not a cycle.
-    expect(acyclic(chain(3, [...path(3), [2, -1]]))).toBe(true);
-  });
-
   it("rejects cycles, implicit ordering gaps, invalid ignores, and unsatisfiable variants", () => {
     const base = specification();
     expect(
@@ -196,5 +164,39 @@ describe("process trace specification", () => {
         },
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("process trace happens-before cycles", () => {
+  it("reports exactly the cycles of the happens-before graph", () => {
+    const chain = (length: number, edges: readonly [number, number][]) =>
+      processTraceSpecificationSchema.safeParse({
+        events: Array.from({ length }, (_, index) => ({
+          id: `e${String(index)}`,
+          source: "lifecycle" as const,
+          exact: { fixture: index },
+          cardinality: { kind: "optional" as const },
+        })),
+        language: {
+          kind: "partial_order",
+          happens_before: edges.map(([before, after]) => ({
+            before: `e${String(before)}`,
+            after: after < 0 ? "missing" : `e${String(after)}`,
+          })),
+        },
+      });
+    const acyclic = (result: ReturnType<typeof chain>) =>
+      result.success ||
+      !result.error.issues.some(
+        ({ message }) => message === "happens-before graph must be acyclic",
+      );
+    const path = (length: number): [number, number][] =>
+      Array.from({ length: length - 1 }, (_, index) => [index, index + 1]);
+
+    expect(acyclic(chain(1_000, path(1_000)))).toBe(true);
+    expect(acyclic(chain(1_000, [...path(1_000), [999, 0]]))).toBe(false);
+    expect(acyclic(chain(3, [...path(3), [1, 1]]))).toBe(false);
+    // An edge to an undeclared event is a reference issue, not a cycle.
+    expect(acyclic(chain(3, [...path(3), [2, -1]]))).toBe(true);
   });
 });
