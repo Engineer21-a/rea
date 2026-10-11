@@ -343,6 +343,7 @@ const waitForWindow = async (
 ): Promise<EndReason> =>
   await new Promise<EndReason>((resolve, reject) => {
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     let removeEnd = (): void => {};
     const finish = (reason: EndReason): void => {
       if (settled) return;
@@ -359,7 +360,18 @@ const waitForWindow = async (
       removeEnd();
       reject(new AnalysisCancelledError("observe_web_session"));
     };
-    const timer = setTimeout(() => finish("window_elapsed"), durationMs);
+    // Node fires delays above 2^31-1 ms after 1 ms; wait in bounded chunks.
+    // Counting elapsed chunks keeps the window on the monotonic timer clock.
+    let remaining = durationMs;
+    const schedule = (): void => {
+      const chunk = Math.min(remaining, 2_147_483_647);
+      remaining -= chunk;
+      timer = setTimeout(
+        remaining > 0 ? schedule : () => finish("window_elapsed"),
+        chunk,
+      );
+    };
+    schedule();
     removeEnd = capture.onEnd(finish);
     signal?.addEventListener("abort", onAbort, { once: true });
     if (signal?.aborted === true) onAbort();

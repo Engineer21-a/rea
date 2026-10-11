@@ -285,7 +285,7 @@ const fetchOne = async (
         fetchedUrl,
       );
     }
-    checkOperation(undefined, signal, budget.deadlineAt);
+    checkOperation(signal, budget.deadlineAt);
     return normalizeSourceMap(
       request,
       await readBoundedText(
@@ -532,7 +532,7 @@ const normalizeSourceMap = (
   const retainedBytesBeforeMap = context.budget.expandedBytes;
   try {
     const check = (): void =>
-      checkOperation(undefined, context.signal, context.deadlineAt);
+      checkOperation(context.signal, context.deadlineAt);
     const inspected = inspectSourceMapValue(parsedJson.value, {
       profile: "browser-collection",
       budget: context.budget,
@@ -760,11 +760,9 @@ const originalModuleEdges = (
 };
 
 const checkOperation = (
-  callerSignal: AbortSignal | undefined,
   operationSignal: AbortSignal | undefined,
   deadlineAt: number,
 ): void => {
-  if (callerSignal?.aborted === true) throw callerSignal.reason;
   if (operationSignal?.aborted === true) throw operationSignal.reason;
   if (Date.now() >= deadlineAt) throw new SourceMapDeadlineError();
 };

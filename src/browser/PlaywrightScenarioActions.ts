@@ -6,6 +6,8 @@ import type {
 } from "../domain/browserScenarioValues.js";
 import type { BrowserScenarioSecrets } from "./BrowserScenarioSecrets.js";
 
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
 type ScenarioLocator = Extract<
   BrowserScenarioAction,
   { readonly locator: unknown }
@@ -42,7 +44,11 @@ export const performPlaywrightScenarioAction = async (
 ): Promise<void> => {
   const { page, action, secrets } = input;
   const timeout = "timeout_ms" in action ? action.timeout_ms : undefined;
-  const options = timeout === undefined ? {} : { timeout };
+  // Playwright arms one 32-bit timer that fires at once above this delay.
+  // The context default is unbounded and the caller's execution boundary
+  // enforces the full timeout_ms with chunked timers.
+  const options =
+    timeout === undefined || timeout > MAX_TIMER_DELAY_MS ? {} : { timeout };
   switch (action.action) {
     case "goto":
       await page.goto(secrets.url(action.destination), {
@@ -85,6 +91,10 @@ export const performPlaywrightScenarioAction = async (
       });
       return;
     case "wait_for_timeout":
-      await page.waitForTimeout(action.duration_ms);
+      for (let remaining = action.duration_ms; remaining > 0;) {
+        const chunk = Math.min(remaining, MAX_TIMER_DELAY_MS);
+        await page.waitForTimeout(chunk);
+        remaining -= chunk;
+      }
   }
 };

@@ -45,13 +45,17 @@ class Generator:
             assert "ows-secret" not in json.dumps(projected), projected
             if isinstance(value, bytes):
                 assert projected["binary_fields"][-1]["state"] == "redacted", projected
+        proxyauth = adapter.project_record({"metadata": {"proxyauth": ("proxy-user", "proxy-secret")}, "backup": {"metadata": {"proxyauth": ["proxy-user", "proxy-secret"]}}}, [])
+        assert proxyauth["reported"] == {"metadata": {"proxyauth": None}, "backup": {"metadata": {"proxyauth": None}}}, proxyauth
+        assert proxyauth["redactions"] == [{"pointer": "/metadata/proxyauth", "reason": "transport-credential"}, {"pointer": "/backup/metadata/proxyauth", "reason": "transport-credential"}], proxyauth
+        assert "proxy-secret" not in json.dumps(proxyauth), proxyauth
         (root / "native-error-classifications.json").write_text(json.dumps({"passed": len(classifications) + 2}))
         first = http.HTTPFlow(connection.Client(peername=("127.0.0.1", 1), sockname=("127.0.0.1", 2)), connection.Server(address=("example.test", 80)))
         first.id = "original-producer-id"
         first.request = http.Request.make("POST", "http://example.test/a?token=ordinary", b"\x00\xffbody", [(b"Authorization", b"Bearer native-transport-secret"), (b"X-Duplicate", b"one"), (b"X-Duplicate", b"two")])
         first.request.path = "http://user:password@example.test/a?token=ordinary#fragment"
         first.response = http.Response.make(200, b"\x00\xfeanswer", [(b"Set-Cookie", b"session=cookie-secret"), (b"Location", b"https://redirect-user:redirect-password@example.test/b?token=ordinary")])
-        first.metadata = {"big_integer": 9007199254740993, "nonfinite": float("inf"), "isLosslessNumber": True, "value": "ordinary-extension", "response": {"headers": [["Authorization", "ordinary-extension-credential-name"]]}}
+        first.metadata = {"big_integer": 9007199254740993, "nonfinite": float("inf"), "isLosslessNumber": True, "value": "ordinary-extension", "response": {"headers": [["Authorization", "ordinary-extension-credential-name"]]}, "proxyauth": ("proxy-user", "proxy-secret")}
         first.websocket = WebSocketData(messages=[WebSocketMessage(2, True, b"\x00\xfdmessage", 123.5)])
         first.backup()
         first.comment = "caller-selected-fixture"

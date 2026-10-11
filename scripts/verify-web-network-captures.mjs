@@ -153,6 +153,18 @@ try {
           first.reported.metadata.response.headers[0][1],
           "ordinary-extension-credential-name",
         );
+        assert.equal(first.reported.metadata.proxyauth, null);
+        assert.equal(first.reported.backup.metadata.proxyauth, null);
+        assert.ok(
+          ["/metadata/proxyauth", "/backup/metadata/proxyauth"].every(
+            (pointer) =>
+              first.redactions.some(
+                (redaction) =>
+                  redaction.pointer === pointer &&
+                  redaction.reason === "transport-credential",
+              ),
+          ),
+        );
       } else {
         assert.equal(value.container.reported.log.creator.name, "mitmproxy");
         assert.equal(value.container.reported.log.creator.version, "12.2.3");
@@ -169,6 +181,7 @@ try {
         "cookie-secret",
         "redirect-password",
         "user:password",
+        "proxy-secret",
       ])
         assert.ok(
           !text.includes(secret),

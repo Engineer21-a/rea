@@ -31,4 +31,37 @@ describe("CdpBrowserProvider navigation timeline", () => {
       "timeline",
     );
   });
+
+  it("keeps a window beyond the 32-bit timer range open", async () => {
+    const browser = await startFakeCdpBrowser();
+    trackBrowser(browser);
+    const controller = new AbortController();
+
+    const result = await new CdpBrowserProvider().observeSession(
+      observeWebSessionInputSchema.parse({
+        cdp_endpoint: browser.endpoint,
+        allowed_origins: [browser.allowedOrigin],
+        target_id: "allowed-page",
+        observation_ms: 3_000_000_000,
+      }),
+      {
+        signal: controller.signal,
+        progress: {
+          report(update) {
+            if (update.completed === 1)
+              setTimeout(() => controller.abort(), 100);
+            return Promise.resolve();
+          },
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        _tag: "AnalysisCancelledError",
+        operation: "observe_web_session",
+      },
+    });
+  });
 });

@@ -79,9 +79,12 @@ supported by this adapter.
   when valid; binary sidecars establish their actual representation. Native
   missing content and empty content remain distinct.
 - `redactions` identify known transport authentication exclusions and explicit
-  sensitive-value exclusions. Redacted byte fields retain neither original
-  bytes nor their digest. Unknown extension names and token-looking query
-  parameters do not establish sensitivity.
+  sensitive-value exclusions. Native `metadata.proxyauth`, where mitmproxy's
+  proxy authentication stores the decoded proxy credentials after removing
+  `Proxy-Authorization`, is a transport authentication exclusion. Redacted
+  byte fields retain neither original bytes nor their digest. Unknown
+  extension names and token-looking query parameters do not establish
+  sensitivity.
 
 Mark sensitive literal string/UTF-8 byte values with MCP `sensitive_values`, or
 repeat CLI `--sensitive-value`. These declarations are never persisted in

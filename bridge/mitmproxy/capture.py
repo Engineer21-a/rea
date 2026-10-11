@@ -139,7 +139,10 @@ def project_record(state, secrets):
                     validate_omitted(item, pointer(path, key), depth + 1)
                     redactions.append({"pointer": path, "reason": "explicit-sensitive-value", "scope": "property-name"})
                     continue
-                result[key] = visit(item, pointer(path, key), depth + 1)
+                child = pointer(path, key)
+                # mitmproxy's proxyauth addon moves the decoded Proxy-Authorization
+                # (username, password) pair into flow metadata and deletes the header.
+                result[key] = visit(item, child, depth + 1, bool(re.fullmatch(r"/(?:backup/)*metadata/proxyauth", child)))
             return result
         raise CaptureFailure("decoder", "Native parser returned an unexpected value type: " + type(value).__name__ + ".", path)
 
