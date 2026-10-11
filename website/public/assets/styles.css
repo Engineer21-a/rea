@@ -268,9 +268,7 @@ section[id] {
   align-items: center;
   gap: 8px;
 }
-.nav-github,
-.nav-discord,
-.nav-x {
+.nav-github {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -283,15 +281,11 @@ section[id] {
   color: var(--muted);
   text-decoration: none;
 }
-.nav-github:hover,
-.nav-discord:hover,
-.nav-x:hover {
+.nav-github:hover {
   background: var(--soft);
   color: var(--ink);
 }
-.nav-github svg,
-.nav-discord svg,
-.nav-x svg {
+.nav-github svg {
   display: block;
   flex-shrink: 0;
 }
@@ -2663,11 +2657,6 @@ html[dir="rtl"] .brand-name {
   }
   .explanatory-figure figcaption a {
     white-space: normal;
-  }
-}
-@media (max-width: 400px) {
-  .header-social .nav-x {
-    display: none;
   }
 }
 

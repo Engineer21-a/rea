@@ -52,7 +52,7 @@ applies to every page.
 | Page text, examples or figures | The page's HTML outside the marked shared regions                | `python3 scripts/website.py check`              |
 | Search title or description    | The page's `<title>` and first description meta tag              | `python3 scripts/website.py sync`, then `check` |
 | Main navigation                | `NAVIGATION` in `scripts/website.py`                             | `sync`, then `check`                            |
-| Header, social links or footer | `templates/header.html.tmpl` or `templates/footer.html.tmpl`     | `sync`, then `check`                            |
+| Header, GitHub link or footer  | `templates/header.html.tmpl` or `templates/footer.html.tmpl`     | `sync`, then `check`                            |
 | Shared link previews           | `templates/sharing.html.tmpl` or `public/assets/social-card.svg` | `sync`, then `check`                            |
 | Translation                    | `locales/<language>/messages.po`                                 | `translations check`, then `check`              |
 
@@ -287,9 +287,8 @@ methods and project notes. Case-study previews live on the Showcases page.
 The closing section offers copyable project prompts, from cloning `rea.tools`
 to reconstructing a game from its executable. The experienced-reader shortcut
 lands directly on the guide links below these prompts.
-“Any questions?” offers FAQ, Discord and issue-report links. The page ends
-with “Join the community”, which links Discord and REA's X account.
-Every content page's header and footer link GitHub, Discord and X.
+The page ends with “Any questions?”, which offers FAQ and issue-report links.
+Every content page's header and footer link the GitHub repository.
 A right-side table of contents stays visible at widths of 1440px and above.
 On narrower screens it becomes a sticky, native disclosure; selecting a link
 closes the menu and focuses the destination. The homepage script follows
