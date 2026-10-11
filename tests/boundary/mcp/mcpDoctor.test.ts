@@ -13,7 +13,10 @@ import {
 } from "../../../src/mcpDoctor.js";
 import { CATALOG_IDENTITY } from "../../../src/catalogIdentity.js";
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe("production MCP doctor", () => {
   it("connects to the production stdio child and verifies the canonical catalog", async () => {
@@ -142,13 +145,17 @@ describe("production MCP doctor", () => {
       diagnostics: { stderr: expect.stringContaining("startup exit") },
     });
   });
+});
 
+describe("production MCP doctor child ownership", () => {
   it("kills a child that misses the absolute startup deadline", async () => {
     const root = await createTestTempDirectory("rea-mcp-doctor-");
     const pidPath = join(root, "pid");
     // Keep filesystem/process I/O real. Advance only the deadline timers,
     // after the fixture proves it started and published its PID.
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Escalation must signal through the transport's child handle.
+    const kill = vi.spyOn(process, "kill");
     const pending = runProductionMcpDoctor({
       command: process.execPath,
       args: [resolve("tests/fixtures/mcpDoctorHang.mjs")],
@@ -167,10 +174,30 @@ describe("production MCP doctor", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     const result = await vi.waitFor(() => pending, { timeout: 10_000 });
     vi.useRealTimers();
+    expect(kill).not.toHaveBeenCalled();
     expect(result.healthy).toBe(false);
     expect(result.checks[0]?.detail).toMatch(/deadline|abort|timed/iu);
     await expect(waitForExit(pid)).resolves.toBeUndefined();
   }, 10_000);
+
+  it("never signals a raw PID after the transport reaps its child", async () => {
+    // A reaped child's PID may already belong to a process REA cannot signal.
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => {
+      throw Object.assign(new Error("kill EPERM"), { code: "EPERM" });
+    });
+    const result = await runProductionMcpDoctor({
+      command: process.execPath,
+      args: [resolve("tests/fixtures/mcpDoctorExit.mjs")],
+      cwd: process.cwd(),
+      environment: process.env,
+      deadlineMs: 2_000,
+    });
+    expect(result).toMatchObject({
+      healthy: false,
+      checks: [{ name: "transport", ok: false }],
+    });
+    expect(kill).not.toHaveBeenCalled();
+  });
 });
 
 const waitForExit = async (pid: number): Promise<void> => {

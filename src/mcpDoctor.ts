@@ -81,7 +81,7 @@ export const runProductionMcpDoctor = async (options: McpDoctorOptions) => {
     Math.max(1, deadline - Date.now()),
   );
   const stderr = captureStderr();
-  const transport = new TrackedStdioClientTransport({
+  const transport = new SharedCloseStdioClientTransport({
     command: options.command,
     args: [...options.args],
     cwd: options.cwd,
@@ -429,60 +429,27 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 const errorMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
-class TrackedStdioClientTransport extends StdioClientTransport {
-  spawnedPid: number | null = null;
+/**
+ * The SDK transport owns the spawned ChildProcess: close() ends stdin, waits
+ * for the child's `close`, and escalates to SIGTERM and SIGKILL through the
+ * child handle, which cannot signal a reused PID once the child is reaped.
+ * The SDK client starts that close without awaiting it when the handshake
+ * fails, and a second close() would return before the escalation finishes,
+ * so every caller awaits the one in-flight close instead.
+ */
+class SharedCloseStdioClientTransport extends StdioClientTransport {
+  #closing: Promise<void> | undefined;
 
-  override async start(): Promise<void> {
-    await super.start();
-    this.spawnedPid = this.pid;
+  override close(): Promise<void> {
+    this.#closing ??= super.close();
+    return this.#closing;
   }
 }
 
 const closeMcpChild = async (
   client: Client,
-  transport: TrackedStdioClientTransport,
+  transport: SharedCloseStdioClientTransport,
 ): Promise<void> => {
-  const pid = transport.spawnedPid ?? transport.pid;
   await Promise.allSettled([client.close()]);
   await Promise.allSettled([transport.close()]);
-  if (pid === null || !(await processExists(pid))) return;
-  await terminateProcess(pid, "SIGTERM");
-  if (await waitForProcessExit(pid, 1_000)) return;
-  await terminateProcess(pid, "SIGKILL");
-  await waitForProcessExit(pid, 1_000);
-};
-
-const terminateProcess = async (
-  pid: number,
-  signal: NodeJS.Signals,
-): Promise<void> => {
-  try {
-    process.kill(pid, signal);
-  } catch (cause: unknown) {
-    if (!(cause instanceof Error && "code" in cause && cause.code === "ESRCH"))
-      throw cause;
-  }
-};
-
-const waitForProcessExit = async (
-  pid: number,
-  timeoutMs: number,
-): Promise<boolean> => {
-  const deadline = Date.now() + timeoutMs;
-  do {
-    if (!(await processExists(pid))) return true;
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
-  } while (Date.now() < deadline);
-  return !(await processExists(pid));
-};
-
-const processExists = async (pid: number): Promise<boolean> => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (cause: unknown) {
-    if (cause instanceof Error && "code" in cause && cause.code === "ESRCH")
-      return false;
-    throw cause;
-  }
 };

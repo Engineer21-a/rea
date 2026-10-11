@@ -201,22 +201,33 @@ const validateNotBefore = (
   return pairs;
 };
 
+/**
+ * Kahn's topological pass: iterative, so chain depth never consumes the call
+ * stack. Edge targets outside the declared events have no outgoing edges and
+ * cannot close a cycle; their reference issues are reported separately.
+ */
 const graphHasCycle = (
-  ids: readonly string[],
   adjacency: ReadonlyMap<string, ReadonlySet<string>>,
 ): boolean => {
-  const active = new Set<string>();
-  const complete = new Set<string>();
-  const visit = (current: string): boolean => {
-    if (active.has(current)) return true;
-    if (complete.has(current)) return false;
-    active.add(current);
-    const cyclic = [...(adjacency.get(current) ?? [])].some(visit);
-    active.delete(current);
-    complete.add(current);
-    return cyclic;
-  };
-  return ids.some(visit);
+  const indegree = new Map<string, number>();
+  for (const id of adjacency.keys()) indegree.set(id, 0);
+  for (const targets of adjacency.values())
+    for (const target of targets) {
+      const count = indegree.get(target);
+      if (count !== undefined) indegree.set(target, count + 1);
+    }
+  const order = [...indegree].flatMap(([id, count]) =>
+    count === 0 ? [id] : [],
+  );
+  // Array iteration visits the events appended as their last edge is removed.
+  for (const current of order)
+    for (const target of adjacency.get(current) ?? []) {
+      const count = indegree.get(target);
+      if (count === undefined) continue;
+      indegree.set(target, count - 1);
+      if (count === 1) order.push(target);
+    }
+  return order.length < indegree.size;
 };
 
 const computeReachability = (
@@ -342,7 +353,7 @@ const validatePartialOrder = (
   const ids = specification.events.map(({ id }) => id);
   const known = new Set(ids);
   const adjacency = buildAdjacency(specification.language, context, known);
-  if (graphHasCycle(ids, adjacency))
+  if (graphHasCycle(adjacency))
     context.addIssue({
       code: "custom",
       message: "happens-before graph must be acyclic",
