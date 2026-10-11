@@ -4,7 +4,7 @@
 >
 > — N0zoM1z0
 
-An English website with translated editions in every README language, explanatory
+The website ships English, German and Croatian editions, with explanatory
 figures, worked guides and Aegis, DX-Ball, Notion, TH04 and CTF investigations.
 English sources are in `website/public/`; translations are standard gettext PO
 catalogs in `website/locales/`. The site uses HTML, CSS and small

@@ -27,12 +27,12 @@ has its own context. The same English sentence may need different wording in a
 different case study.
 
 ```sh
-python3 scripts/website.py translations status --language zh-CN
-python3 scripts/website.py translations check --language zh-CN
+python3 scripts/website.py translations status --language hr
+python3 scripts/website.py translations check --language hr
 python3 scripts/website.py serve
 ```
 
-Open <http://127.0.0.1:4173/zh-CN/>. The language selector opens the equivalent
+Open <http://127.0.0.1:4173/hr/>. The language selector opens the equivalent
 page in another edition. Check the page you edited, its figures and its copy
 buttons. Rebuild a running preview with `python3 scripts/prepare-website.py`.
 Before submitting a change, run `python3 scripts/website.py check`.
@@ -113,16 +113,14 @@ translated fragments.
 
 ## Language coverage and initial translations
 
-`languages.json` lists the same editions as the root README, with native names,
-standard language tags and text direction. English keeps its existing routes;
-other editions use a language prefix such as `/ja/` or `/pt-BR/`. Arabic and
-Persian use right-to-left page layouts; code and numeric demos remain left to
-right. The two Notes target applications and the downloadable source archive
-remain the original investigation inputs.
+The website ships English, German and Croatian editions. `languages.json` lists
+the same editions as the root README, with native names, standard language tags
+and text direction. English keeps its existing routes; the other editions use a
+language prefix such as `/de/` or `/hr/`. The two Notes target applications and
+the downloadable source archive remain the original investigation inputs.
 
 The first catalogs started with machine-assisted drafts. They include editorial
-corrections to navigation, prompts and technical terminology. Traditional Chinese
-started from the Simplified Chinese draft and is maintained independently.
+corrections to navigation, prompts and technical terminology.
 Further language review and more natural phrasing are welcome. Submit the PO changes with
 the page and language you checked; a screenshot can help explain a layout issue.
 
@@ -131,7 +129,7 @@ the page and language you checked; a screenshot can help explain a layout issue.
 PO catalogs have source references, reviewer comments and explicit pending
 translations. They can be edited locally and can later be connected to Weblate
 without replacing the site's translation format. This keeps one authored layout
-and a small offline build instead of maintaining nineteen HTML trees.
+and a small offline build instead of maintaining three HTML trees.
 
 See [GNU gettext's PO format](https://www.gnu.org/software/gettext/manual/html_node/PO-File-Entries.html),
 [Weblate's translation workflows](https://docs.weblate.org/en/latest/workflows.html)
