@@ -4,7 +4,6 @@ import type {
   File,
   ImportExpression,
   Node,
-  StringLiteral,
 } from "@babel/types";
 import { traverseJavaScriptAst } from "./javascript/javascriptSemanticTraversal.js";
 import { parserPluginsForPath } from "./javascript/javascriptSourceParser.js";
@@ -14,7 +13,6 @@ import {
   isExportAllDeclaration,
   isExportNamedDeclaration,
   isIdentifier,
-  isImport,
   isImportDeclaration,
   isImportExpression,
   isMemberExpression,
@@ -66,38 +64,10 @@ const safeModuleName = (node: Node | null | undefined): string | undefined => {
 
 const resolveSpecifier = (
   specifier: string,
-): ReferenceSourceImportResolution => {
-  if (specifier.startsWith(".") || specifier.startsWith("/")) return "internal";
-  if (specifier.startsWith("node:") || specifier.startsWith("data:"))
-    return "external";
-  return "external";
-};
-
-const isModuleExpression = (
-  expression: Node | null | undefined,
-): expression is StringLiteral | CallExpression =>
-  isStringLiteral(expression) || isCallExpression(expression);
-
-const moduleSpecifierFromExpression = (
-  expression: Node | null | undefined,
-):
-  | { specifier: string; parseState: ReferenceSourceImportParseState }
-  | undefined => {
-  if (isStringLiteral(expression))
-    return { specifier: expression.value, parseState: "parsed" };
-  if (
-    isCallExpression(expression) &&
-    isImport(expression.callee) &&
-    expression.arguments.length > 0
-  ) {
-    const first = expression.arguments[0];
-    if (isStringLiteral(first)) {
-      return { specifier: first.value, parseState: "parsed" };
-    }
-    return { specifier: "<dynamic-import>", parseState: "partial" };
-  }
-  return undefined;
-};
+): ReferenceSourceImportResolution =>
+  specifier.startsWith(".") || specifier.startsWith("/")
+    ? "internal"
+    : "external";
 
 const appendRelationship = (
   relationships: ReferenceSourceImportRelationship[],
@@ -110,6 +80,18 @@ const appendRelationship = (
   },
 ): void => {
   if (input.to === undefined) return;
+  // An empty specifier names no module; keep the edge as an explicit unknown
+  // instead of an empty target the source graph cannot represent.
+  if (input.to === "") {
+    relationships.push({
+      from_path: input.fromPath,
+      to: "<empty-specifier>",
+      kind: input.kind,
+      resolution: "unknown",
+      parse_state: "partial",
+    });
+    return;
+  }
   relationships.push({
     from_path: input.fromPath,
     to: input.to,
@@ -237,46 +219,27 @@ const extractRequireAndDynamicImports = (
     if (
       isRequireCallee(call.callee) &&
       unshadowedRequireCalls.has(call) &&
-      isModuleExpression(first)
-    ) {
-      const result = moduleSpecifierFromExpression(first);
-      if (result !== undefined) {
-        appendRelationship(relationships, {
-          fromPath: from_path,
-          to: result.specifier,
-          kind: "requires",
-          parseState: result.parseState,
-        });
-      }
-      continue;
-    }
-
-    if (isImport(call.callee) && isModuleExpression(first)) {
-      const result = moduleSpecifierFromExpression(first);
-      if (result !== undefined) {
-        appendRelationship(relationships, {
-          fromPath: from_path,
-          to: result.specifier,
-          kind: "imports",
-          parseState: result.parseState,
-        });
-      }
-    }
+      isStringLiteral(first)
+    )
+      appendRelationship(relationships, {
+        fromPath: from_path,
+        to: first.value,
+        kind: "requires",
+        parseState: "parsed",
+      });
   }
 };
 
 const parseWithBabel = (
   path: string,
   source: string,
-  language: string | null,
 ): {
   ast: File | undefined;
   reasons: readonly string[];
 } => {
   // Single parser-mode owner: path-driven plugins (dts/JSX/mts) shared with
-  // the semantic pipeline. `language` only gates non-JS/TS callers upstream;
+  // the semantic pipeline. Language only gates non-JS/TS callers upstream;
   // TypeScript syntax must parse identically here and in semantic analysis.
-  void language;
   const plugins = parserPluginsForPath(path);
 
   try {
@@ -322,7 +285,7 @@ export const parseReferenceSourceImports = (
       ],
     };
   }
-  const { ast, reasons } = parseWithBabel(path, source, language);
+  const { ast, reasons } = parseWithBabel(path, source);
   const parseFailures = reasons.map((reason) => ({
     path,
     parser: "babel",

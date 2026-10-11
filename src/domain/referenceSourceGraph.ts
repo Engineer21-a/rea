@@ -10,7 +10,6 @@ import {
 } from "./referenceSourcePathIdentity.js";
 import { compareUnicodeCodePoints } from "./unicodeCodePointOrder.js";
 import { digestSchema } from "./../domain/digests.js";
-import { prefixedDigestSchema } from "./../domain/digests.js";
 const boundedTextSchema = z.string().min(1);
 const relativePathSchema = z
   .string()
@@ -209,25 +208,10 @@ const historicalSourceGraphInputSchema = z.strictObject({
   root_sha256: z.never().optional(),
 });
 
-const historicalSourceManifestBaseSchema = z.strictObject({
-  schema: z.literal("HistoricalSourceManifest"),
-  authority: z.literal("historical-reference"),
-  manifest_id: prefixedDigestSchema("hsm"),
-  graph_sha256: digestSchema,
-  root_sha256: digestSchema,
-  inventory_state: z.enum(["complete", "partial", "unknown"]),
-  entry_count: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-  relationship_count: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-});
-
 export type HistoricalSourceGraph = z.infer<typeof historicalSourceGraphSchema>;
 export type HistoricalSourceGraphInput = z.infer<
   typeof historicalSourceGraphInputSchema
 >;
-export type HistoricalSourceManifest = z.infer<
-  typeof historicalSourceManifestBaseSchema
->;
-
 /** Stable identity used to sort and deduplicate source parse failures. */
 export const historicalSourceParseFailureKey = (
   failure: HistoricalSourceGraphInput["parse_failures"][number],
@@ -501,50 +485,4 @@ export const createHistoricalSourceGraph = (
     ...parsed,
     root_sha256: computeRootSha256(parsed.entries, parsed.exclusions),
   });
-};
-
-/** Parse a graph and reject stale or caller-invented root commitments. */
-export const parseHistoricalSourceGraph = (
-  input: unknown,
-): HistoricalSourceGraph => historicalSourceGraphSchema.parse(input);
-
-/** Compute a deterministic graph commitment containing no absolute root path. */
-export const computeHistoricalSourceGraphSha256 = (input: unknown): string =>
-  digestCanonicalValue(
-    parseHistoricalSourceGraph(input),
-    "Reference source graph",
-  );
-
-/** Build a deterministic, relocation-independent manifest for a source graph. */
-export const createHistoricalSourceManifest = (
-  input: unknown,
-): HistoricalSourceManifest => {
-  const graph = parseHistoricalSourceGraph(input);
-  const semantic = {
-    schema: "HistoricalSourceManifest" as const,
-    authority: "historical-reference" as const,
-    graph_sha256: computeHistoricalSourceGraphSha256(graph),
-    root_sha256: graph.root_sha256,
-    inventory_state: graph.inventory_state,
-    entry_count: graph.entries.length,
-    relationship_count: graph.relationships.length,
-  };
-  return historicalSourceManifestBaseSchema.parse({
-    ...semantic,
-    manifest_id: `hsm_${digestCanonicalValue(semantic, "Reference source graph")}`,
-  });
-};
-
-/** Parse and verify a historical source manifest's semantic identifier. */
-export const parseHistoricalSourceManifest = (
-  input: unknown,
-): HistoricalSourceManifest => {
-  const manifest = historicalSourceManifestBaseSchema.parse(input);
-  const { manifest_id: manifestId, ...semantic } = manifest;
-  if (
-    `hsm_${digestCanonicalValue(semantic, "Reference source graph")}` !==
-    manifestId
-  )
-    throw new TypeError("Historical source manifest identifier does not match");
-  return manifest;
 };

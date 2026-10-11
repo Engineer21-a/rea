@@ -9,11 +9,12 @@ import {
   STATIC_ROUTE_CALL_NAMES,
   argumentValue,
   calleeName,
+  createSourceLineIndex,
   endpointArgument as endpointArgumentHelper,
   prefixedArgument,
   range,
-  rangeForOffsets,
   sourceSlice,
+  type SourceLineIndex,
   staticPath,
   staticPathResolutionContext,
   storageKind,
@@ -323,6 +324,8 @@ export const addSourceMapDirectives = (
 ): void => {
   // Read real comment tokens only; quoted text can contain identical markers.
   // Keep both current/legacy line annotations and minifier block annotations.
+  // Index lines once and only when a new directive needs a location.
+  let lines: SourceLineIndex | undefined;
   for (const comment of comments) {
     const start = comment.start;
     const end = comment.end;
@@ -360,9 +363,12 @@ export const addSourceMapDirectives = (
       terminator === -1 ? commentSource.length : declaredStart + terminator;
     if (declaredEnd === declaredStart) continue;
     const declared = commentSource.slice(declaredStart, declaredEnd);
-    const location = rangeForOffsets(source, start, start + declaredEnd);
-    addFindingOnce(accumulator, `source-map\0${declared}`, () =>
-      accumulator.sourceMaps.push({ declared_url: declared, location }),
-    );
+    addFindingOnce(accumulator, `source-map\0${declared}`, () => {
+      lines ??= createSourceLineIndex(source);
+      accumulator.sourceMaps.push({
+        declared_url: declared,
+        location: lines.range(start, start + declaredEnd),
+      });
+    });
   }
 };

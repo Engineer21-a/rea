@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { digestCanonicalValue } from "./canonicalDigest.js";
 import {
-  computeHistoricalSourceGraphSha256,
   createHistoricalSourceGraph,
-  createHistoricalSourceManifest,
   historicalSourceGraphSchema,
   historicalSourceParseFailureKey,
-  parseHistoricalSourceGraph,
-  parseHistoricalSourceManifest,
   type HistoricalSourceGraphInput,
 } from "./referenceSourceGraph.js";
 
@@ -120,7 +117,7 @@ describe("historical source graph", () => {
       manifests: paths,
     };
     const graph = createHistoricalSourceGraph(input);
-    expect(parseHistoricalSourceGraph(graph)).toEqual(graph);
+    expect(historicalSourceGraphSchema.parse(graph)).toEqual(graph);
     expect(() =>
       createHistoricalSourceGraph({
         ...input,
@@ -131,15 +128,13 @@ describe("historical source graph", () => {
     ).toThrow(/Unicode code point/u);
   });
 
-  it("builds and verifies internal root and manifest commitments", () => {
+  it("builds and verifies internal root commitments", () => {
     const graph = createHistoricalSourceGraph(graphInput());
-    const first = createHistoricalSourceManifest(graph);
-    const second = createHistoricalSourceManifest(structuredClone(graph));
 
-    expect(first).toEqual(second);
-    expect(parseHistoricalSourceGraph(graph)).toEqual(graph);
-    expect(parseHistoricalSourceManifest(first)).toEqual(first);
-    expect(first.graph_sha256).toBe(computeHistoricalSourceGraphSha256(graph));
+    expect(createHistoricalSourceGraph(structuredClone(graphInput()))).toEqual(
+      graph,
+    );
+    expect(historicalSourceGraphSchema.parse(graph)).toEqual(graph);
     expect(() =>
       createHistoricalSourceGraph({
         ...graphInput(),
@@ -155,7 +150,7 @@ describe("historical source graph", () => {
   it("rejects stale roots and commits file, directory, and symlink semantics", () => {
     const original = createHistoricalSourceGraph(graphInput());
     expect(() =>
-      parseHistoricalSourceGraph({ ...original, root_sha256: HASH_A }),
+      historicalSourceGraphSchema.parse({ ...original, root_sha256: HASH_A }),
     ).toThrow(/root commitment/u);
 
     for (const mutate of [
@@ -288,8 +283,8 @@ describe("partial historical source graphs", () => {
     };
     const revised = createHistoricalSourceGraph(changedMessage);
     expect(revised.root_sha256).toBe(graph.root_sha256);
-    expect(computeHistoricalSourceGraphSha256(revised)).not.toBe(
-      computeHistoricalSourceGraphSha256(graph),
+    expect(digestCanonicalValue(revised, "Reference source graph")).not.toBe(
+      digestCanonicalValue(graph, "Reference source graph"),
     );
     expect(() =>
       createHistoricalSourceGraph({
@@ -424,13 +419,6 @@ describe("historical source graph validation", () => {
         extra: true,
       }),
     ).toThrow();
-
-    const manifest = createHistoricalSourceManifest(
-      createHistoricalSourceGraph(graphInput()),
-    );
-    expect(() =>
-      parseHistoricalSourceManifest({ ...manifest, entry_count: 999 }),
-    ).toThrow(/identifier does not match/u);
   });
 });
 

@@ -6,6 +6,7 @@ import * as t from "@babel/types";
 
 import type {
   JavaScriptBundlerRegistration,
+  JavaScriptSourcePoint,
   JavaScriptSourceRange,
   JavaScriptStaticAnalysis,
   JavaScriptStaticPathContext,
@@ -639,15 +640,53 @@ export const range = (node: t.Node): JavaScriptSourceRange => ({
   },
 });
 
-/** Convert exact text offsets into a source range. */
-export const rangeForOffsets = (
-  source: string,
-  start: number,
-  end: number,
-): JavaScriptSourceRange => ({
-  start: pointForOffset(source, start),
-  end: pointForOffset(source, end),
-});
+/** Resolves exact text offsets in one source into source ranges. */
+export interface SourceLineIndex {
+  readonly range: (start: number, end: number) => JavaScriptSourceRange;
+}
+
+const LINE_FEED = 0x0a;
+const CARRIAGE_RETURN = 0x0d;
+
+const isLineTerminator = (code: number): boolean =>
+  code === LINE_FEED ||
+  code === CARRIAGE_RETURN ||
+  code === 0x2028 ||
+  code === 0x2029;
+
+/**
+ * Scan JavaScript line starts once so each offset resolves by binary search.
+ * Lines are 1-based; columns count UTF-16 units after the last terminator,
+ * where CRLF is one terminator and LF, CR, LS, and PS are each one.
+ */
+export const createSourceLineIndex = (source: string): SourceLineIndex => {
+  const lineStarts = [0];
+  for (let offset = 0; offset < source.length; offset += 1) {
+    const code = source.charCodeAt(offset);
+    if (!isLineTerminator(code)) continue;
+    if (code === CARRIAGE_RETURN && source.charCodeAt(offset + 1) === LINE_FEED)
+      offset += 1;
+    lineStarts.push(offset + 1);
+  }
+  const point = (offset: number): JavaScriptSourcePoint => {
+    const bounded = Math.min(Math.max(offset, 0), source.length);
+    let low = 0;
+    let high = lineStarts.length - 1;
+    while (low < high) {
+      const middle = low + Math.ceil((high - low) / 2);
+      if ((lineStarts[middle] ?? 0) <= bounded) low = middle;
+      else high = middle - 1;
+    }
+    // A prefix ending between CR and LF ends with a whole CR terminator.
+    if (
+      source.charCodeAt(bounded - 1) === CARRIAGE_RETURN &&
+      source.charCodeAt(bounded) === LINE_FEED
+    )
+      return { line: low + 2, column: 0 };
+    return { line: low + 1, column: bounded - (lineStarts[low] ?? 0) };
+  };
+  return { range: (start, end) => ({ start: point(start), end: point(end) }) };
+};
 
 /** Compare two exact source ranges. */
 export const sourceRangesEqual = (
@@ -659,13 +698,6 @@ export const sourceRangesEqual = (
   left.start.column === right.start.column &&
   left.end.line === right.end.line &&
   left.end.column === right.end.column;
-
-const pointForOffset = (source: string, offset: number) => {
-  const before = source.slice(0, offset);
-  // Match JavaScript line terminators, treating CRLF as a single newline.
-  const lines = before.split(/\r\n|[\n\r\u2028\u2029]/u);
-  return { line: lines.length, column: lines.at(-1)?.length ?? 0 };
-};
 
 /** Observe known bundler/framework marker strings without claiming dependency use. */
 export const detectVendors = (source: string): string[] =>

@@ -46,10 +46,6 @@ export const omitPrototypeKeys = (
   value: unknown,
 ): PropertyListWithoutPrototypeKeys => withoutKey(value, PROTOTYPE_KEY);
 
-// Comments and CDATA text are consumed whole so only element keys match.
-const KEY_TOKEN =
-  /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<key>([^<]*)<\/key>|<key><!\[CDATA\[([\s\S]*?)\]\]><\/key>/gu;
-
 const XML_ENTITIES: Readonly<Record<string, string>> = {
   amp: "&",
   apos: "'",
@@ -80,6 +76,64 @@ export const decodeXmlText = (text: string): string =>
   );
 
 /**
+ * Replace each element key spelling `__proto__` with `replacement`. Tokens
+ * match leftmost first, trying a comment, a CDATA section, `<key>text</key>`
+ * and `<key><![CDATA[text]]></key>` in that order; comment and CDATA text is
+ * copied whole so only element keys match. Starts advance monotonically, so a
+ * terminator missing after one start is missing after every later one; that
+ * outcome is remembered, keeping the scan linear on unterminated input.
+ */
+const substitutePrototypeKeys = (text: string, replacement: string): string => {
+  const unterminated = new Set<string>();
+  const find = (terminator: string, from: number): number => {
+    if (unterminated.has(terminator)) return -1;
+    const index = text.indexOf(terminator, from);
+    if (index < 0) unterminated.add(terminator);
+    return index;
+  };
+  const parts: string[] = [];
+  let copied = 0;
+  let position = 0;
+  for (;;) {
+    const start = text.indexOf("<", position);
+    if (start < 0) break;
+    let end = -1;
+    let substitute = false;
+    if (text.startsWith("<!--", start)) {
+      const close = find("-->", start + 4);
+      if (close >= 0) end = close + 3;
+    } else if (text.startsWith("<![CDATA[", start)) {
+      const close = find("]]>", start + 9);
+      if (close >= 0) end = close + 3;
+    } else if (text.startsWith("<key>", start)) {
+      const next = text.indexOf("<", start + 5);
+      if (next >= 0 && text.startsWith("</key>", next)) {
+        end = next + 6;
+        substitute =
+          decodeXmlText(text.slice(start + 5, next)) === PROTOTYPE_KEY;
+      } else if (text.startsWith("<![CDATA[", start + 5)) {
+        const close = find("]]></key>", start + 14);
+        if (close >= 0) {
+          end = close + 9;
+          substitute = text.slice(start + 14, close) === PROTOTYPE_KEY;
+        }
+      }
+    }
+    if (end < 0) {
+      position = start + 1;
+      continue;
+    }
+    if (substitute) {
+      parts.push(text.slice(copied, start), replacement);
+      copied = end;
+    }
+    position = end;
+  }
+  parts.push(text.slice(copied));
+  return parts.join("");
+};
+
+/**
  * Decode an XML plist whose dictionaries may use the legal key `__proto__`,
  * which the `plist` decoder rejects outright. Those entries are omitted and
  * counted so callers can report them instead of failing the whole document.
@@ -93,12 +147,8 @@ export const parseXmlPropertyList = (
   const decoded = decodeXmlText(text);
   let placeholder = "__rea_prototype_key__";
   while (decoded.includes(placeholder)) placeholder = `_${placeholder}`;
-  const substituted = text.replace(
-    KEY_TOKEN,
-    (token, plain?: string, cdata?: string) =>
-      (plain === undefined ? cdata : decodeXmlText(plain)) === PROTOTYPE_KEY
-        ? `<key>${placeholder}</key>`
-        : token,
+  return withoutKey(
+    parse(substitutePrototypeKeys(text, `<key>${placeholder}</key>`)),
+    placeholder,
   );
-  return withoutKey(parse(substituted), placeholder);
 };

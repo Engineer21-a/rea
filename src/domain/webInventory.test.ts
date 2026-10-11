@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   reconcileCapturedWebScript,
-  reconcileWebScript,
   stableWebResources,
   stableWebScriptKey,
 } from "./webInventory.js";
@@ -65,6 +64,7 @@ describe("stable web inventory", () => {
         type: "Script",
         mime_type: "text/javascript",
         content_size: 200,
+        rawUrl: "https://app.example.test/assets/vendor.js",
       },
       {
         url: script.url,
@@ -72,40 +72,76 @@ describe("stable web inventory", () => {
         type: "Script",
         mime_type: "text/javascript",
         content_size: 1_024,
+        rawUrl: script.url,
       },
     ];
-    const forward = stableWebResources([...inputs, ...inputs.slice(0, 1)]);
-    const reverse = stableWebResources([...inputs].reverse());
+    const publicInputs = inputs.map(
+      ({ rawUrl: _rawUrl, ...resource }) => resource,
+    );
+    const forward = stableWebResources([
+      ...publicInputs,
+      ...publicInputs.slice(0, 1),
+    ]);
+    const reverse = stableWebResources([...publicInputs].reverse());
 
     expect(reverse).toEqual(forward);
-    expect(reconcileWebScript(script, forward)).toEqual({
+    expect(
+      reconcileCapturedWebScript(
+        { ...script, rawUrl: script.url },
+        inputs,
+        forward,
+      ),
+    ).toEqual({
       status: "exact",
       resource_key: forward.find(({ url }) => url === script.url)?.resource_key,
     });
+    const versioned = `${script.url}?v=2`;
     expect(
-      reconcileWebScript({ ...script, url: `${script.url}?v=2` }, forward),
+      reconcileCapturedWebScript(
+        { ...script, url: versioned, rawUrl: versioned },
+        inputs,
+        forward,
+      ),
     ).toEqual({ status: "unmatched", reason: "no_exact_sanitized_url" });
   });
 
-  it("reports duplicate resource observations as ambiguous", () => {
+  it("reports duplicate sanitized observations without a unique raw match as ambiguous", () => {
     const duplicate = {
       url: script.url,
       origin: "https://app.example.test",
       type: "Script",
       mime_type: "text/javascript",
       content_size: 1_024,
+      rawUrl: `${script.url}?token=one`,
     };
-    const resources = stableWebResources([
+    const rawResources = [
       duplicate,
-      { ...duplicate, content_size: 2_048 },
-    ]);
-
-    expect(reconcileWebScript(script, resources)).toEqual({
+      { ...duplicate, content_size: 2_048, rawUrl: `${script.url}?token=two` },
+    ];
+    const resources = stableWebResources(
+      rawResources.map(({ rawUrl: _rawUrl, ...resource }) => resource),
+    );
+    const expected = {
       status: "ambiguous",
       candidate_resource_keys: resources
         .map(({ resource_key }) => resource_key)
         .sort(),
-    });
+    };
+
+    expect(
+      reconcileCapturedWebScript(
+        { ...script, rawUrl: `${script.url}?token=three` },
+        rawResources,
+        resources,
+      ),
+    ).toEqual(expected);
+    expect(
+      reconcileCapturedWebScript(
+        { ...script, rawUrl: `${script.url}?token=one` },
+        [duplicate, duplicate],
+        resources,
+      ),
+    ).toEqual(expected);
   });
 
   it("reconciles raw URLs independently of stable inventory sort order", () => {

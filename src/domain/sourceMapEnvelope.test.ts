@@ -17,31 +17,56 @@ describe("source-map envelope walk", () => {
     expect(isVersion3Map([{ version: 3 }])).toBe(false);
   });
 
-  it("collects indexed section leaves without validating offsets by default", () => {
-    const root = {
+  it("collects indexed section leaves in declared order without validating offsets", () => {
+    const section = (source: string, line: number) => ({
+      offset: { line, column: 0 },
+      map: { ...leaf, sources: [source] },
+    });
+    const flat = {
+      version: 3,
+      sections: [section("first.ts", 0), section("second.ts", 10)],
+    };
+    expect(flattenSourceMapLeaves(flat)?.map((map) => map.sources)).toEqual([
+      ["first.ts"],
+      ["second.ts"],
+    ]);
+    const nested = {
       version: 3,
       sections: [
-        { offset: { line: 0, column: 0 }, map: leaf },
-        { offset: { line: 10, column: 0 }, map: { ...leaf, sources: [] } },
+        section("a.ts", 0),
+        {
+          offset: { line: 10, column: 0 },
+          map: {
+            version: 3,
+            sections: [section("b.ts", 0), section("c.ts", 5)],
+          },
+        },
+        section("d.ts", 20),
       ],
     };
-    expect(flattenSourceMapLeaves(root)).toHaveLength(2);
+    expect(flattenSourceMapLeaves(nested)?.map((map) => map.sources)).toEqual([
+      ["a.ts"],
+      ["b.ts"],
+      ["c.ts"],
+      ["d.ts"],
+    ]);
   });
 
-  it("rejects non-map sections and enforces offsets when requested", () => {
+  it("rejects non-map sections and flattens sections without valid offsets", () => {
     const missing = {
       version: 3,
       sections: [{ offset: { line: 0, column: 0 } }],
     };
     expect(flattenSourceMapLeaves(missing)).toBeUndefined();
-    const badOffset = {
-      version: 3,
-      sections: [{ offset: { line: -1, column: 0 }, map: leaf }],
-    };
     expect(
-      flattenSourceMapLeaves(badOffset, { validateOffsets: true }),
-    ).toBeUndefined();
-    expect(flattenSourceMapLeaves(badOffset)).toHaveLength(1);
+      flattenSourceMapLeaves({
+        version: 3,
+        sections: [{ offset: { line: -1, column: 0 }, map: leaf }],
+      }),
+    ).toEqual([leaf]);
+    expect(
+      flattenSourceMapLeaves({ version: 3, sections: [{ map: leaf }] }),
+    ).toEqual([leaf]);
   });
 
   it("rejects non-version-3 roots and nested maps", () => {

@@ -46,11 +46,6 @@ const addressCoordinate = (
   return { space, offset: BigInt(offset) };
 };
 
-const procedureMapSchema = z.record(z.string(), z.string());
-const addressedNamesSchema = z.array(
-  z.object({ address: z.string(), name: z.string() }),
-);
-const addressedNameMapSchema = z.record(z.string(), z.string());
 const segmentSchema = z.object({
   name: z.string(),
   start: z.string(),
@@ -369,36 +364,6 @@ export const parseFunctionDossier = (
           { cause: parsed.error },
         ),
       );
-};
-
-/** Parse Hopper's direct or wrapped procedure map into stable entries. */
-export const parseProcedures = (
-  value: JsonValue,
-): Result<readonly AddressedName[], HopperProtocolError> => {
-  const parsed = procedureMapSchema.safeParse(
-    unwrapProperty(value, "procedures"),
-  );
-  return parsed.success
-    ? ok(
-        Object.entries(parsed.data).map(([address, name]) => ({
-          address,
-          name,
-        })),
-      )
-    : invalid("procedure map", parsed.error);
-};
-
-/** Parse Hopper's direct or wrapped list of address/name records. */
-export const parseNames = (
-  value: JsonValue,
-): Result<readonly AddressedName[], HopperProtocolError> => {
-  const unwrapped = unwrapProperty(value, "names");
-  const records = addressedNamesSchema.safeParse(unwrapped);
-  if (records.success) return ok(records.data);
-  const map = addressedNameMapSchema.safeParse(unwrapped);
-  return map.success
-    ? ok(Object.entries(map.data).map(([address, name]) => ({ address, name })))
-    : invalid("name list", map.error);
 };
 
 /** Parse callee/caller strings from direct or wrapped Hopper results. */

@@ -49,24 +49,6 @@ export const stableWebResources = (
   );
 };
 
-/** Reconcile one script with resource-tree observations without fuzzy matching. */
-export const reconcileWebScript = (
-  script: WebInventoryScriptInput,
-  resources: readonly StableWebResource[],
-): WebResourceReconciliation => {
-  const candidates = resources.filter(
-    (resource) => resource.url === script.url,
-  );
-  if (candidates.length === 1)
-    return { status: "exact", resource_key: candidates[0]?.resource_key ?? "" };
-  if (candidates.length > 1)
-    return {
-      status: "ambiguous",
-      candidate_resource_keys: uniqueResourceKeys(candidates),
-    };
-  return { status: "unmatched", reason: "no_exact_sanitized_url" };
-};
-
 /** Prefer exact transient raw-URL matching, then report sanitized ambiguity. */
 export const reconcileCapturedWebScript = (
   script: WebInventoryScriptInput & { readonly rawUrl: string },

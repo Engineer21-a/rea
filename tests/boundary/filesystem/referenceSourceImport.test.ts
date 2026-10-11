@@ -14,7 +14,6 @@ import {
   projectReferenceSourceEntryFailure,
 } from "../../../src/application/ReferenceSourceImportEntries.js";
 import type { ReferenceSourceRead } from "../../../src/reference/ReferenceSourceReaderTypes.js";
-import { createHistoricalSourceManifest } from "../../../src/domain/referenceSourceGraph.js";
 
 const fixture = async (parent: string, name: string): Promise<string> => {
   const root = join(parent, name);
@@ -292,9 +291,7 @@ describe("reference source import behavior", () => {
         importTree(rightRoot),
       ]);
       if (!left.ok || !right.ok) throw new Error("expected imports to pass");
-      expect(createHistoricalSourceManifest(left.value)).toEqual(
-        createHistoricalSourceManifest(right.value),
-      );
+      expect(left.value).toEqual(right.value);
       expect(left.value.relationships).toContainEqual(
         expect.objectContaining({
           from_path: "src/main.ts",

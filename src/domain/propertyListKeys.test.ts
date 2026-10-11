@@ -55,6 +55,27 @@ it("keeps entity-like text beyond Unicode in comments and CDATA", () => {
   });
 });
 
+it("keeps scanning keys after a CDATA key that its closing tag does not follow", () => {
+  const text = plist(
+    "<dict><key><![CDATA[a]]>b</key><string>1</string><key>__proto__</key><string>x</string></dict>",
+  );
+  expect(parseXmlPropertyList(text)).toEqual({
+    value: { a: "1" },
+    omittedPrototypeKeys: 1,
+  });
+});
+
+it.each([
+  ["unterminated comments", "<!--"],
+  ["unterminated CDATA sections", "<![CDATA["],
+  ["unterminated CDATA keys", "<key><![CDATA["],
+])("rejects repeated %s in linear time", (_name, token) => {
+  const text = token.repeat(Math.ceil(400_000 / token.length));
+  const started = performance.now();
+  expect(() => parseXmlPropertyList(text)).toThrow();
+  expect(performance.now() - started).toBeLessThan(1_000);
+});
+
 it("omits own __proto__ entries that JSON decoding creates", () => {
   const decoded: unknown = JSON.parse(
     '{"__proto__":{"x":1},"a":[{"__proto__":2,"b":3}]}',
