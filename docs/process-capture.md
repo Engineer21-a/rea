@@ -114,7 +114,9 @@ from launch, must be ordered, and must fall within `timeout_ms`. Inputs marked
 Terminal echo of a dispatched sensitive input is replaced by the same
 placeholder in raw and rendered terminal frames, including line-discipline echo
 forms (CR or LF echoed as a newline, control characters echoed as `^X`); the
-retained-byte accounting describes the redacted output. Output that the target
+retained-byte accounting describes the redacted output. Each dispatch replaces
+exactly one echo, the first complete echo form after it; later output that
+merely contains the same characters is retained verbatim. Output that the target
 derives from the input itself, such as a line editor's redraw or a masked
 prompt, is not recognized as echo.
 Environment overrides are recorded in the scenario commitment; inherited

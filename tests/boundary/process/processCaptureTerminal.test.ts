@@ -80,3 +80,36 @@ itWithCaptureCapability(
   },
   20_000,
 );
+
+itWithCaptureCapability(
+  "journals output held for a possible echo before the final filesystem checkpoint",
+  async () => {
+    // The target's last output is a prefix of the sensitive echo, so the
+    // redactor holds it until the end of observation releases it.
+    const scenario = parseProcessScenario({
+      executable: process.execPath,
+      arguments: [
+        "-e",
+        "setTimeout(() => process.stdout.write('tail:zq'), 600); setTimeout(() => {}, 900)",
+      ],
+      events: [{ type: "input", at_ms: 100, data: "zqx\r", sensitive: true }],
+    });
+    const result = await captureProcessScenario(scenario);
+    if (!result.ok) throw result.error;
+    const { frames, event_journal: journal } = result.value;
+    const tail = frames.findIndex(({ data }) => data.endsWith("zq"));
+    expect(frames.map(({ data }) => data).join("")).toContain("tail:zq");
+    expect(tail).toBeGreaterThanOrEqual(0);
+    const orderOf = (collection: string, index: number): number | undefined =>
+      journal.find(
+        (entry) => entry.collection === collection && entry.index === index,
+      )?.capture_order;
+    const finalCheckpoint = result.value.filesystem_checkpoints.findIndex(
+      ({ name }) => name === "after_settlement",
+    );
+    expect(orderOf("frames", tail)).toBeLessThan(
+      orderOf("filesystem_checkpoints", finalCheckpoint) ?? -1,
+    );
+  },
+  20_000,
+);

@@ -7,6 +7,8 @@ interface SensitiveEchoPattern {
   readonly placeholder: string;
   /** One alternative set per input character, longest alternative first. */
   readonly steps: readonly (readonly string[])[];
+  /** Dispatches of this input whose echo has not been observed yet. */
+  unmatched: number;
 }
 
 interface EchoMatch {
@@ -67,27 +69,49 @@ const matchEcho = (
  * Streaming redactor owned by one process capture. It replaces terminal echo
  * of sensitive scripted inputs that were already dispatched with the same
  * placeholder the interaction log records, before raw frames or the renderer
- * see the bytes. Output that could still complete an echo form is held back
- * until the next chunk resolves it, so non-matching output is delayed by at
- * most the longest pending match.
+ * see the bytes. Each dispatch redacts exactly one echo, the first complete
+ * echo form observed after it; later output that merely contains the same
+ * characters stays verbatim, so short inputs such as `y\r` cannot rewrite
+ * unrelated observations. Output that could still complete an echo form is
+ * held back until the next chunk resolves it, so non-matching output is
+ * delayed by at most the longest pending match.
  */
 export class SensitiveEchoRedactor {
-  readonly #patterns: SensitiveEchoPattern[] = [];
-  readonly #leadingCharacters = new Set<string>();
+  readonly #patterns = new Map<string, SensitiveEchoPattern>();
+  #leadingCharacters = new Set<string>();
   #pending = "";
 
   /** Register one dispatched sensitive input; call before writing it to the terminal. */
   addSensitiveInput(input: string): void {
     if (input.length === 0) return;
-    if (this.#patterns.some((pattern) => pattern.input === input)) return;
-    const steps = Array.from(input, echoForms);
-    for (const alternative of steps[0] ?? [])
-      this.#leadingCharacters.add(alternative.charAt(0));
-    this.#patterns.push({
+    const existing = this.#patterns.get(input);
+    if (existing !== undefined) {
+      existing.unmatched += 1;
+      return;
+    }
+    this.#patterns.set(input, {
       input,
       placeholder: redactedInputPlaceholder(input),
-      steps,
+      steps: Array.from(input, echoForms),
+      unmatched: 1,
     });
+    this.#indexLeadingCharacters();
+  }
+
+  #indexLeadingCharacters(): void {
+    this.#leadingCharacters = new Set(
+      [...this.#patterns.values()].flatMap((pattern) =>
+        (pattern.steps[0] ?? []).map((alternative) => alternative.charAt(0)),
+      ),
+    );
+  }
+
+  /** Count one observed echo; a fully echoed input stops matching. */
+  #consume(pattern: SensitiveEchoPattern): void {
+    pattern.unmatched -= 1;
+    if (pattern.unmatched > 0) return;
+    this.#patterns.delete(pattern.input);
+    this.#indexLeadingCharacters();
   }
 
   /** Return the redacted output that no longer depends on future chunks. */
@@ -102,7 +126,7 @@ export class SensitiveEchoRedactor {
 
   #scan(text: string, final: boolean): string {
     this.#pending = "";
-    if (this.#patterns.length === 0) return text;
+    if (this.#patterns.size === 0) return text;
     let output = "";
     let released = 0;
     let offset = 0;
@@ -111,16 +135,16 @@ export class SensitiveEchoRedactor {
         offset += 1;
         continue;
       }
-      let longest: { end: number; placeholder: string } | undefined;
+      let longest: { end: number; pattern: SensitiveEchoPattern } | undefined;
       let partial = false;
-      for (const pattern of this.#patterns) {
+      for (const pattern of this.#patterns.values()) {
         const match = matchEcho(pattern, text, offset);
         partial ||= match.partial;
         if (
           match.end !== undefined &&
           (longest === undefined || match.end > longest.end)
         )
-          longest = { end: match.end, placeholder: pattern.placeholder };
+          longest = { end: match.end, pattern };
       }
       if (partial && !final) {
         this.#pending = text.slice(offset);
@@ -130,7 +154,8 @@ export class SensitiveEchoRedactor {
         offset += 1;
         continue;
       }
-      output += text.slice(released, offset) + longest.placeholder;
+      output += text.slice(released, offset) + longest.pattern.placeholder;
+      this.#consume(longest.pattern);
       offset = longest.end;
       released = offset;
     }

@@ -504,6 +504,9 @@ const completeCapture = async (options: {
   const sampling = await runtime.stopSampler();
   const samplingPartial = sampling.partial;
   await settleProcessCaptureJournal(options.eventJournal);
+  // Journal held output before the final checkpoint it preceded; the second
+  // flush below releases anything a trailing callback held during the snapshot.
+  runtime.flushTerminalOutput();
   assertNotCancelled(options.signal);
   let after: Awaited<ReturnType<typeof snapshotRoots>>;
   try {

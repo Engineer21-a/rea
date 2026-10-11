@@ -100,6 +100,27 @@ describe("SensitiveEchoRedactor", () => {
     expect(output).toBe(`x${redactedInputPlaceholder("abab")}ay`);
   });
 
+  it("redacts one echo per dispatch and keeps later look-alike output", () => {
+    expect(redact(["y\r"], ["y\r\nready\r\nsay\r\n"]).output).toBe(
+      `${redactedInputPlaceholder("y\r")}ready\r\nsay\r\n`,
+    );
+    expect(redact(["\r"], ["\r\nline one\r\nline two\r\n"]).output).toBe(
+      `${redactedInputPlaceholder("\r")}line one\r\nline two\r\n`,
+    );
+  });
+
+  it("redacts every echo of an input dispatched several times", () => {
+    const redactor = new SensitiveEchoRedactor();
+    redactor.addSensitiveInput("pin\r");
+    expect(redactor.write("pin\r\nok\r\n")).toBe(
+      `${redactedInputPlaceholder("pin\r")}ok\r\n`,
+    );
+    expect(redactor.write("pin again")).toBe("pin again");
+    redactor.addSensitiveInput("pin\r");
+    expect(redactor.write("pin\r\n")).toBe(redactedInputPlaceholder("pin\r"));
+    expect(redactor.flush()).toBe("");
+  });
+
   it("ignores empty sensitive input", () => {
     expect(redact([""], ["output"]).output).toBe("output");
   });
