@@ -42,6 +42,8 @@ export type MacHopperInstallResult =
   | {
       readonly status: "installed";
       readonly launcherPath: string;
+      /** Hopper is installed, but the optional first-run open did not start. */
+      readonly launchFailure?: string;
       readonly cleanupFailure?: string;
     }
   | {
@@ -139,7 +141,16 @@ export const installMacHopper = async (
       const launcherPath = join(destination, "Contents/MacOS/hopper");
       if (!(await host.launcherReady(launcherPath)))
         return { status: "failed", reason: "launcher_missing" };
-      await host.openApplication(destination);
+      try {
+        await host.openApplication(destination);
+      } catch (cause: unknown) {
+        // The bundle is already installed; opening it only starts first-run setup.
+        return {
+          status: "installed",
+          launcherPath,
+          launchFailure: `Hopper was installed, but REA could not open it (${failureMessage(cause).trim()}).`,
+        };
+      }
       return { status: "installed", launcherPath };
     })();
   } catch (cause: unknown) {

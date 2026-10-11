@@ -480,8 +480,10 @@ host requirements; Windows Ghidra uses the [experimental P0 boundary](windows-gh
 On macOS, approved setup downloads the official DMG, checks its published size
 and digest, validates the application bundle, and atomically installs it to
 `~/Applications/Hopper Disassembler.app`. REA then opens Hopper so the
-operator can choose its demo mode or activate an existing license. Homebrew and
-administrator access are not used.
+operator can choose its demo mode or activate an existing license. If macOS
+cannot open it, for example in an SSH session, setup keeps the installation,
+continues with client configuration and reports the open failure in its
+remediation. Homebrew and administrator access are not used.
 
 The Hopper launcher action used by REA creates a document from an executable;
 its supported command-line interface does not attach to an already-open

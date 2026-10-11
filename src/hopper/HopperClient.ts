@@ -115,6 +115,11 @@ export class HopperClient {
   #operationFailure: OperationFailureRecord | undefined;
   #startupController: AbortController | undefined;
   #startPromise: Promise<Result<HopperServerInfo, AnalysisError>> | undefined;
+  #joinStartup:
+    | ((
+        signal?: AbortSignal,
+      ) => Promise<Result<HopperServerInfo, AnalysisError>>)
+    | undefined;
   #closePromise: Promise<Result<null, AnalysisError>> | undefined;
   readonly #onSocketData = (chunk: string): void => {
     this.#responses.push(chunk);
@@ -267,44 +272,82 @@ export class HopperClient {
         closed.ok ? this.start(signal) : closed,
       );
     }
-    if (this.#startPromise !== undefined) return this.#startPromise;
+    if (this.#startPromise !== undefined) {
+      // Every joined caller cancelled this launch: relaunch for a live caller
+      // once it settles, unless incomplete cleanup still holds its resources.
+      if (
+        this.#startupController?.signal.aborted === true &&
+        !isAborted(signal)
+      )
+        return this.#startPromise.then((result) =>
+          result.ok || result.error.cleanupIncomplete
+            ? result
+            : this.start(signal),
+        );
+      return this.#joinStartup?.(signal) ?? this.#startPromise;
+    }
 
     const controller = new AbortController();
-    const onAbort = (): void => controller.abort(signal?.reason);
-    if (signal?.aborted === true) onAbort();
-    else signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted === true) controller.abort(signal.reason);
     const started = this.#start(controller.signal);
+    // The launch is shared, so only the last waiting caller's cancellation
+    // aborts it; an earlier canceller returns without tearing it down.
+    let waiting = 0;
+    let settled = false;
+    const join = (
+      caller?: AbortSignal,
+    ): Promise<Result<HopperServerInfo, AnalysisError>> => {
+      if (settled || controller.signal.aborted) return started;
+      if (caller === undefined) {
+        waiting += 1;
+        return started;
+      }
+      if (caller.aborted)
+        return Promise.resolve(err(new HopperCancelledError()));
+      waiting += 1;
+      return new Promise((resolve, reject) => {
+        const onAbort = (): void => {
+          if (settled) return;
+          waiting -= 1;
+          if (waiting > 0) resolve(err(new HopperCancelledError()));
+          else controller.abort(caller.reason);
+        };
+        caller.addEventListener("abort", onAbort, { once: true });
+        void started
+          .finally(() => caller.removeEventListener("abort", onAbort))
+          .then(resolve, reject);
+      });
+    };
     this.#startupController = controller;
     this.#startPromise = started;
-    const release = (): void => {
-      signal?.removeEventListener("abort", onAbort);
-    };
+    this.#joinStartup = join;
     const reset = (): void => {
       if (this.#startPromise === started) {
         this.#startPromise = undefined;
         if (this.#startupController === controller) {
           this.#startupController = undefined;
         }
+        if (this.#joinStartup === join) this.#joinStartup = undefined;
       }
     };
     void started.then(
       (result) => {
-        release();
+        settled = true;
         if (!result.ok) {
           this.#rememberStartupFailure(result.error);
           reset();
         }
       },
       (cause: unknown) => {
+        settled = true;
         this.#logger.debug(
           { error: cause instanceof Error ? cause.message : String(cause) },
           "Hopper startup promise rejected during bookkeeping",
         );
-        release();
         reset();
       },
     );
-    return started;
+    return join(signal);
   }
 
   async #start(
@@ -502,7 +545,10 @@ export class HopperClient {
       await starting?.catch(() => undefined);
       return await this.#cleanup(options);
     } finally {
-      if (this.#startPromise === starting) this.#startPromise = undefined;
+      if (this.#startPromise === starting) {
+        this.#startPromise = undefined;
+        this.#joinStartup = undefined;
+      }
       if (this.#startupController === controller) {
         this.#startupController = undefined;
       }

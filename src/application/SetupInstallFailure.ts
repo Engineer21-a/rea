@@ -17,6 +17,7 @@ export type SetupHopperInstallResult =
   | {
       readonly status: "installed";
       readonly launcherPath: string;
+      readonly launchFailure?: string;
       readonly cleanupFailure?: string;
     }
   | {

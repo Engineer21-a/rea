@@ -158,6 +158,9 @@ export const systemSetupHost = (
         return {
           status: "installed",
           launcherPath: result.launcherPath,
+          ...(result.launchFailure === undefined
+            ? {}
+            : { launchFailure: result.launchFailure }),
           ...(result.cleanupFailure === undefined
             ? {}
             : { cleanupFailure: result.cleanupFailure }),

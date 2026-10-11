@@ -327,3 +327,38 @@ describe("setup workflow lifecycle and provider planning", () => {
     expect(host.configurations).toBe(0);
   });
 });
+
+describe("macOS Hopper first-run open", () => {
+  it("keeps an installed Hopper and configures clients when opening it fails", async () => {
+    const host = new FakeSetupHost();
+    const launchFailure =
+      "Hopper was installed, but REA could not open it (LSOpenURLsWithRole() failed with error -610).";
+    host.hopperLaunchFailure = launchFailure;
+    host.clients = [{ name: "codex", configPath: "/codex.toml" }];
+    const events: SetupProgressEvent[] = [];
+
+    const result = await runSetup(
+      {
+        ...options(true, true),
+        clientIds: ["codex"],
+        onProgress: (event) => events.push(event),
+      },
+      host,
+    );
+
+    expect(result.appliedActions).toEqual(
+      expect.arrayContaining(["installed_hopper", "configured_codex"]),
+    );
+    expect(host.configurations).toBe(1);
+    expect(result.status).toBe("needs_human");
+    expect(result.remediation?.startsWith(`${launchFailure} Open Hopper`)).toBe(
+      true,
+    );
+    expect(events).toContainEqual({
+      actionId: "install_hopper",
+      label: "Hopper deep-analysis provider",
+      state: "warning",
+      detail: `/manual/Hopper; ${launchFailure}`,
+    });
+  });
+});

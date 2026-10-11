@@ -30,6 +30,7 @@ export class FakeSetupHost implements SetupHost {
   ghidra: string | undefined;
   javaHome: string | undefined;
   hopperInstallSucceeds = true;
+  hopperLaunchFailure: string | undefined;
   skill: "installed" | "unchanged" | "failed" = "installed";
   clients: readonly SetupClient[] = [];
   availableClients: readonly SetupClient[] | undefined;
@@ -81,6 +82,9 @@ export class FakeSetupHost implements SetupHost {
       return Promise.resolve({
         status: "installed",
         launcherPath: this.hopper,
+        ...(this.hopperLaunchFailure === undefined
+          ? {}
+          : { launchFailure: this.hopperLaunchFailure }),
       });
     }
     return Promise.resolve({

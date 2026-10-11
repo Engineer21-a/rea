@@ -16,6 +16,7 @@ class FakeMacHopperHost implements MacHopperInstallHost {
   unmounts = 0;
   cleanups = 0;
   opens = 0;
+  openFailure: Error | undefined;
   replaces = false;
 
   download = (url: string) =>
@@ -61,7 +62,9 @@ class FakeMacHopperHost implements MacHopperInstallHost {
   launcherReady = () => Promise.resolve(this.launcherSucceeds);
   openApplication = () => {
     this.opens += 1;
-    return Promise.resolve();
+    return this.openFailure === undefined
+      ? Promise.resolve()
+      : Promise.reject(this.openFailure);
   };
   cleanup = () => {
     this.cleanups += 1;
@@ -77,6 +80,23 @@ describe("macOS Hopper installation", () => {
       status: "installed",
       launcherPath:
         "/home/user/Applications/Hopper Disassembler.app/Contents/MacOS/hopper",
+    });
+    expect(host.opens).toBe(1);
+    expect(host.unmounts).toBe(1);
+    expect(host.cleanups).toBe(1);
+  });
+
+  it("reports an installed application whose first-run open failed", async () => {
+    const host = new FakeMacHopperHost();
+    host.openFailure = new Error(
+      "Command failed: open\nLSOpenURLsWithRole() failed with error -610\n",
+    );
+    await expect(installMacHopper({}, host)).resolves.toEqual({
+      status: "installed",
+      launcherPath:
+        "/home/user/Applications/Hopper Disassembler.app/Contents/MacOS/hopper",
+      launchFailure:
+        "Hopper was installed, but REA could not open it (Command failed: open\nLSOpenURLsWithRole() failed with error -610).",
     });
     expect(host.opens).toBe(1);
     expect(host.unmounts).toBe(1);
