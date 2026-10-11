@@ -61,6 +61,47 @@ The server advertises `listChanged: true`. Updating a registered guided prompt
 emits `notifications/prompts/list_changed`, allowing clients to refresh their
 cached prompt catalog.
 
+## Custom prompts
+
+Set `REA_PROMPTS_DIR` to an absolute directory to add your own prompts beside
+the guided workflows. REA reads every `*.md` file directly in that directory
+at server start, in file-name order. Each file holds YAML front matter and a
+Markdown template:
+
+```markdown
+---
+name: evidence_summary
+title: Summarize Evidence
+description: Summarize the current findings for a team report.
+arguments:
+  topic:
+    description: Feature or question the summary covers
+    required: true
+  report_language:
+    description: Language of the summary
+    default: Deutsch
+---
+
+Summarize what the retained Evidence shows about {{topic}}. Separate
+observations, inferences and unknowns, and write the summary in
+{{report_language}}.
+```
+
+- `name` and argument names use lowercase letters, digits and underscores.
+- `{{argument}}` placeholders must name declared arguments. An omitted
+  optional argument renders its `default`, or nothing.
+- A required argument cannot have a default. Clients must supply it.
+
+A document that fails these rules, exceeds 256 KiB, or reuses the name of a
+guided workflow or an earlier document is skipped. REA logs the file and the
+reason as a warning and registers the remaining documents. Custom prompts
+render your template with the argument values verbatim; they do not run tools
+by themselves. Restart the MCP server after you change the directory.
+
+Clients that support MCP prompts, such as Claude Code, VS Code and Gemini
+CLI, list them with the guided workflows. For a client without prompt
+support, paste the rendered Markdown into the conversation instead.
+
 ## Session-aware completion
 
 MCP `completion/complete` completes guided-prompt arguments; it does not define

@@ -87,7 +87,10 @@ import { registerManagedWorkflowTools } from "./registerManagedWorkflowTools.js"
 import { NATIVE_TOOL_CONTRACTS } from "../contracts/native/nativeToolContracts.js";
 import { registerEvidenceTools } from "./registerEvidenceTools.js";
 import { registerOfficialTools } from "./registerOfficialTools.js";
-import { registerGuidedPrompts } from "./registerPrompts.js";
+import {
+  registerConfiguredCustomPrompts,
+  registerGuidedPrompts,
+} from "./registerPrompts.js";
 import { registerSessionTools } from "./registerSessionTools.js";
 import type { AvailabilityPolicy } from "../application/CapabilityInventory.js";
 import { sessionAvailabilityPolicy } from "./sessionAvailabilityPolicy.js";
@@ -341,6 +344,7 @@ export const createServer = (
   );
   registerObservationTools(toolContext);
   registerGuidedPrompts(server, analysis, session);
+  registerConfiguredCustomPrompts(server, environment, logger);
   if (session !== undefined) {
     registerSessionTools(server, session, toolLogger, {
       ...selectedOptions,

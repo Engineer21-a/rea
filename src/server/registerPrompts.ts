@@ -1,4 +1,6 @@
 import type { EvidenceMcpServer } from "./EvidenceMcpServer.js";
+import { isAbsolute } from "node:path";
+import type { Logger } from "pino";
 import {
   completable,
   type RegisteredPrompt,
@@ -7,12 +9,17 @@ import { z } from "zod";
 
 import type { AnalysisOperationPort } from "../application/AnalysisProvider.js";
 import type { BinarySessionPort } from "../application/binary/BinarySessionPort.js";
+import { loadCustomPromptLibrary } from "../application/CustomPromptLibrary.js";
 import {
   PROMPT_CONTRACTS,
   renderGuidedPrompt,
   type PromptArgumentContract,
   type PromptContract,
 } from "../contracts/promptContracts.js";
+import {
+  renderCustomPrompt,
+  type CustomPromptDefinition,
+} from "../domain/customPrompt.js";
 import {
   createPromptCompletionSource,
   type PromptCompletionSource,
@@ -117,4 +124,65 @@ const promptResult = (contract: PromptContract, arguments_: unknown) => {
       },
     ],
   };
+};
+
+/** Register researcher-authored prompts next to the guided workflows. */
+const registerCustomPrompts = (
+  server: EvidenceMcpServer,
+  prompts: readonly CustomPromptDefinition[],
+): void => {
+  for (const definition of prompts) {
+    const shape: Record<string, z.ZodType> = {};
+    for (const [name, argument] of Object.entries(definition.arguments)) {
+      const value = z
+        .string()
+        .min(1)
+        .refine((value) => value.trim().length > 0)
+        .describe(argument.description);
+      shape[name] = argument.required ? value : value.optional();
+    }
+    server.registerPrompt(
+      definition.name,
+      {
+        title: definition.title,
+        description: definition.description,
+        argsSchema: z.object(shape),
+      },
+      (arguments_) => ({
+        description: definition.description,
+        messages: [
+          {
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: renderCustomPrompt(
+                definition,
+                promptValuesSchema.parse(arguments_),
+              ),
+            },
+          },
+        ],
+      }),
+    );
+  }
+};
+
+/** Load REA_PROMPTS_DIR prompts; a bad document never blocks its peers. */
+export const registerConfiguredCustomPrompts = (
+  server: EvidenceMcpServer,
+  environment: Readonly<NodeJS.ProcessEnv>,
+  logger: Logger,
+): void => {
+  const directory = environment.REA_PROMPTS_DIR;
+  if (directory === undefined || !isAbsolute(directory)) return;
+  const library = loadCustomPromptLibrary(
+    directory,
+    new Set(PROMPT_CONTRACTS.map(({ name }) => name)),
+  );
+  registerCustomPrompts(server, library.prompts);
+  for (const { source, reason } of library.rejected)
+    logger.warn(
+      { layer: "server", source, reason },
+      "Custom prompt document was not registered",
+    );
 };

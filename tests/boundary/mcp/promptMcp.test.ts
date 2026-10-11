@@ -294,6 +294,82 @@ describe("guided prompt completion registry", () => {
   });
 });
 
+describe("custom prompts over MCP", () => {
+  it("serves REA_PROMPTS_DIR documents beside the guided workflows", async () => {
+    const directory = await createTestTempDirectory("rea-custom-prompts-");
+    temporaryDirectories.push(directory);
+    await writeFile(
+      join(directory, "triage.md"),
+      [
+        "---",
+        "name: static_triage",
+        "title: Static triage",
+        "description: Triage a sample without running it.",
+        "arguments:",
+        "  sample_path:",
+        "    description: Absolute path of the sample",
+        "    required: true",
+        "  report_language:",
+        "    description: Language of the final report",
+        "    default: Deutsch",
+        "---",
+        "Analyze {{sample_path}} and report in {{report_language}}.",
+      ].join("\n"),
+    );
+    await writeFile(
+      join(directory, "collision.md"),
+      "---\nname: investigate_feature\ntitle: T\ndescription: D\n---\nBody",
+    );
+    await writeFile(join(directory, "broken.md"), "no front matter");
+    await writeFile(join(directory, "notes.txt"), "ignored");
+    const session = fixtureSession();
+    const client = await connect(
+      createServer(
+        { kind: "session", session },
+        { environment: { REA_PROMPTS_DIR: directory } },
+      ),
+    );
+    resources.push(session);
+
+    const prompts = (await client.listPrompts()).prompts;
+    expect(prompts.map(({ name }) => name)).toEqual([
+      ...PROMPT_CONTRACTS.map(({ name }) => name),
+      "static_triage",
+    ]);
+    expect(prompts.at(-1)).toMatchObject({
+      title: "Static triage",
+      arguments: [
+        {
+          name: "sample_path",
+          description: "Absolute path of the sample",
+          required: true,
+        },
+        {
+          name: "report_language",
+          description: "Language of the final report",
+          required: false,
+        },
+      ],
+    });
+    const rendered = await client.getPrompt({
+      name: "static_triage",
+      arguments: { sample_path: "/samples/a.bin" },
+    });
+    expect(rendered.messages[0]?.content).toEqual({
+      type: "text",
+      text: "Analyze /samples/a.bin and report in Deutsch.",
+    });
+    await expect(
+      client.getPrompt({ name: "static_triage", arguments: {} }),
+    ).rejects.toThrow(/Invalid arguments/u);
+    const guided = await client.getPrompt({
+      name: "investigate_feature",
+      arguments: { feature: "search" },
+    });
+    expect(JSON.stringify(guided)).toContain("Investigate a feature");
+  });
+});
+
 describe("guided prompt completion lifecycle", () => {
   it("survives a cancelled completion and ignores its late result", async () => {
     let calls = 0;
