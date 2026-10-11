@@ -58,7 +58,9 @@ if (args.includes("--version")) {
     const child =
       mode === "reserved-name"
         ? join(output, "$input")
-        : join(output, "rootfs", "config");
+        : mode === "nfd-name"
+          ? join(output, "rootfs", "cafe\u0301")
+          : join(output, "rootfs", "config");
     await mkdir(join(output, "rootfs"));
     const content = Buffer.from("firmware=true\n");
     if (mode !== "missing-file")

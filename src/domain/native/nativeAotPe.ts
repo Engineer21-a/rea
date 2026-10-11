@@ -162,10 +162,15 @@ class MethodTableIndex {
   }
 
   find(address: bigint, budget: NativeAotParserBudget): number {
+    return this.lookup(address, budget) ?? -1;
+  }
+
+  /** Like `find`, but `undefined` means this lookup exhausted the work budget. */
+  lookup(address: bigint, budget: NativeAotParserBudget): number | undefined {
     let low = 0;
     let high = this.#count;
     while (low < high) {
-      if (!budget.consumeWork(8)) return -1;
+      if (!budget.consumeWork(8)) return undefined;
       const middle = low + ((high - low) >>> 1);
       const record = middle * METHOD_TABLE_RECORD_BYTES;
       const candidate = this.#records.readBigUInt64LE(record);
@@ -948,6 +953,117 @@ const hydrate = (
   return { base, sizeBytes: outputLength, sha256 };
 };
 
+/**
+ * Index candidates by their base type. Children of base i are
+ * `children[start[i]..start[i + 1])` in ascending candidate order. Each base is
+ * resolved once through the address-sorted index; `undefined` means the work
+ * budget stopped the lookups. `bases` is caller-owned scratch of `count` slots.
+ */
+const buildChildIndex = (
+  candidates: MethodTableIndex,
+  budget: NativeAotParserBudget,
+  bases: Int32Array,
+): { start: Uint32Array; children: Uint32Array } | undefined => {
+  const count = candidates.count;
+  const start = new Uint32Array(count + 1);
+  const children = new Uint32Array(count);
+  for (let index = 0; index < count; index++) {
+    if (!budget.consumeWork(8)) return undefined;
+    const related = candidates.at(index)?.related ?? 0n;
+    const base = related === 0n ? -1 : candidates.lookup(related, budget);
+    if (base === undefined) return undefined;
+    bases[index] = base;
+    if (base >= 0) start[base + 1] = (start[base + 1] ?? 0) + 1;
+  }
+  for (let index = 0; index < count; index++)
+    start[index + 1] = (start[index + 1] ?? 0) + (start[index] ?? 0);
+  const cursor = start.slice(0, count);
+  for (let index = 0; index < count; index++) {
+    const base = bases[index] ?? -1;
+    if (base < 0) continue;
+    const slot = cursor[base] ?? 0;
+    children[slot] = index;
+    cursor[base] = slot + 1;
+  }
+  return { start, children };
+};
+
+/** Visit one table's interface pointers until `visit` or the work budget stops. */
+const forEachInterfaceAddress = (
+  image: PeImage,
+  table: MethodTable,
+  budget: NativeAotParserBudget,
+  visit: (address: bigint) => boolean,
+): boolean => {
+  for (let index = 0; index < table.interfacesCount; index++) {
+    if (!budget.consumeWork(8)) return false;
+    const ifaceAddress = readU64(
+      image.read(
+        table.address + 24n + BigInt((table.slotsCount + index) * 8),
+        8,
+      ),
+    );
+    if (ifaceAddress !== null && !visit(ifaceAddress)) return false;
+  }
+  return true;
+};
+
+/**
+ * Include every candidate reachable from the included `root` through base-type
+ * (`related`) and interface edges. Work is charged per lookup and per edge,
+ * not per candidate pair. Returns false when a parser budget stops it; tables
+ * included so far stay included.
+ */
+const includeInheritanceClosure = (
+  image: PeImage,
+  candidates: MethodTableIndex,
+  root: number,
+  budget: NativeAotParserBudget,
+): boolean => {
+  const count = candidates.count;
+  // Child start offsets, child list, fill cursor, and the base/worklist array.
+  const indexBytes = (4 * count + 1) * Uint32Array.BYTES_PER_ELEMENT;
+  if (!budget.reserveWorkingMemory(indexBytes)) return false;
+  try {
+    // Holds each candidate's base index while indexing, then the worklist.
+    const pending = new Int32Array(count);
+    const index = buildChildIndex(candidates, budget, pending);
+    if (index === undefined) return false;
+    let depth = 0;
+    pending[depth++] = root;
+    const includeNext = (next: number) => {
+      if (candidates.isIncluded(next)) return;
+      candidates.include(next);
+      pending[depth++] = next;
+    };
+    while (depth > 0) {
+      const baseIndex = pending[--depth] ?? -1;
+      const base = candidates.at(baseIndex);
+      if (base === undefined) continue;
+      const end = index.start[baseIndex + 1] ?? 0;
+      for (let edge = index.start[baseIndex] ?? 0; edge < end; edge++) {
+        if (!budget.consumeWork(8)) return false;
+        includeNext(index.children[edge] ?? -1);
+      }
+      const interfacesIncluded = forEachInterfaceAddress(
+        image,
+        base,
+        budget,
+        (address) => {
+          const interfaceIndex = candidates.find(address, budget);
+          if (budget.truncationReason !== undefined) return false;
+          if (interfaceIndex >= 0) includeNext(interfaceIndex);
+          return true;
+        },
+      );
+      if (!interfacesIncluded) return false;
+    }
+    return true;
+  } finally {
+    budget.releaseWorkingMemory(indexBytes);
+  }
+};
+
 const discoverTables = (
   image: PeImage,
   hydrated: { readonly base: bigint; readonly sizeBytes: number } | null,
@@ -1106,54 +1222,7 @@ const discoverTables = (
       truncated,
     };
   candidates.include(objectRoot);
-  let changed = true;
-  while (changed && !truncated) {
-    changed = false;
-    candidates.forEach((base, baseIndex) => {
-      if (truncated || !candidates.isIncluded(baseIndex)) return;
-      for (
-        let candidateIndex = 0;
-        candidateIndex < candidates.count;
-        candidateIndex++
-      ) {
-        if (!budget.consumeWork(8)) {
-          truncated = true;
-          return;
-        }
-        const candidate = candidates.at(candidateIndex);
-        if (
-          candidate !== undefined &&
-          candidate.related === base.address &&
-          !candidates.isIncluded(candidateIndex)
-        ) {
-          candidates.include(candidateIndex);
-          changed = true;
-        }
-      }
-      for (let index = 0; index < base.interfacesCount; index++) {
-        if (!budget.consumeWork(8)) {
-          truncated = true;
-          return;
-        }
-        const ifaceAddress = readU64(
-          image.read(
-            base.address + 24n + BigInt((base.slotsCount + index) * 8),
-            8,
-          ),
-        );
-        if (ifaceAddress === null) continue;
-        const interfaceIndex = candidates.find(ifaceAddress, budget);
-        if (budget.truncationReason !== undefined) {
-          truncated = true;
-          return;
-        }
-        if (interfaceIndex >= 0 && !candidates.isIncluded(interfaceIndex)) {
-          candidates.include(interfaceIndex);
-          changed = true;
-        }
-      }
-    });
-  }
+  truncated = !includeInheritanceClosure(image, candidates, objectRoot, budget);
   return {
     tables: candidates,
     pointerCount,

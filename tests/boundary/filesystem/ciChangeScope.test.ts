@@ -237,6 +237,8 @@ it.each([
     { code: false, evm: true, browser: false, package: false },
   ],
   ["unknown-input", { code: true, package: true, evm: true, browser: true }],
+  // Its Python tests run through lldbTracerPython.test.ts in the code lane.
+  ["bridge/native/rea_lldb_tracer.py", { code: true, runtime: true }],
 ])("selects the appropriate lanes for %s", async (path, expected) => {
   const { directory, base } = await fixture();
   const head = await change(directory, [path]);

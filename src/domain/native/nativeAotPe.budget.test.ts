@@ -7,6 +7,7 @@ import {
 import {
   nativeAotPeDigest,
   nativeAotPeFixture,
+  nativeAotPeInheritanceFixture,
 } from "../../../tests/fixtures/nativeaotPe.js";
 
 const REPORT_BUDGET = NATIVE_AOT_MAX_REPORT_BYTES;
@@ -38,6 +39,65 @@ describe("NativeAOT parser resource budgets", () => {
       },
     });
     expect(report.coverage.source_bytes_omitted).toBeUndefined();
+  });
+});
+
+describe("NativeAOT MethodTable inheritance closure", () => {
+  it("includes thousands of subclasses within the default budgets and still scans frozen strings", () => {
+    const fixture = nativeAotPeInheritanceFixture(5_000);
+    const started = performance.now();
+    const report = parseNativeAotPe(
+      fixture.bytes,
+      nativeAotPeDigest(fixture.bytes),
+      REPORT_BUDGET,
+    ).summary;
+    expect(performance.now() - started).toBeLessThan(10_000);
+    expect(report.truncated).not.toBe(true);
+    expect(report.coverage.truncation_reason).toBeUndefined();
+    expect(report.status).toBe("complete");
+    const types = report.types.map((type) => type.address);
+    expect(types).toEqual(
+      [...fixture.includedAddresses].sort((left, right) =>
+        BigInt(left) < BigInt(right) ? -1 : 1,
+      ),
+    );
+    for (const excluded of fixture.excludedAddresses)
+      expect(types).not.toContain(excluded);
+    expect(report.method_tables).toBe(fixture.includedAddresses.length);
+    // The closure costs work per lookup and edge, not per candidate pair.
+    expect(report.coverage.work_units_examined).toBeLessThan(4 * 1024 * 1024);
+    expect(report.frozen_strings).toEqual([
+      { address: "0x140002300", value: "REA_NATIVEAOT_FROZEN" },
+    ]);
+  });
+
+  it("stops at the work budget while building the closure without dropping the root", () => {
+    const fixture = nativeAotPeInheritanceFixture(200);
+    const sha = nativeAotPeDigest(fixture.bytes);
+    const complete = parseNativeAotPe(
+      fixture.bytes,
+      sha,
+      REPORT_BUDGET,
+    ).summary;
+    const limits: NativeAotParserLimits = {
+      sourceBytes: fixture.bytes.length,
+      workUnits: (complete.coverage.work_units_examined ?? 0) - 4_000,
+      workingMemoryBytes: 64 * 1024 * 1024,
+    };
+    const report = parseNativeAotPe(
+      fixture.bytes,
+      sha,
+      REPORT_BUDGET,
+      undefined,
+      limits,
+    ).summary;
+    expect(report).toMatchObject({
+      status: "partial",
+      truncated: true,
+      coverage: { truncation_reason: "work-unit-budget" },
+    });
+    expect(report.types.map((type) => type.address)).toContain("0x140002200");
+    expect(report.method_tables).toBeLessThan(fixture.includedAddresses.length);
   });
 });
 

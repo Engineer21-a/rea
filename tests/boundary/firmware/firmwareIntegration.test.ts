@@ -352,6 +352,26 @@ it("distinguishes a real output file named $input from the selected original", a
   await assertFirmwareCleanup(fixture.launches);
 });
 
+it("reports the published path of a file whose producer name is NFD", async () => {
+  const fixture = await firmwareFixture("nfd-name");
+  const outcome = await fixture.service.execute("extract_firmware", {
+    path: fixture.path,
+    output_directory: fixture.output,
+  });
+  if (!outcome.ok) throw outcome.error;
+  const result = firmwareResultSchemas.extract_firmware.parse(
+    outcome.value.normalized_result,
+  );
+  expect(result.files[0]).toMatchObject({
+    relative_path: "rootfs/cafe\u0301",
+    path: `${fixture.output}/rootfs/caf\u00e9`,
+  });
+  expect(await readFile(result.files[0]?.path ?? "", "utf8")).toBe(
+    "firmware=true\n",
+  );
+  await assertFirmwareCleanup(fixture.launches);
+});
+
 it.each(["hash", "malformed", "budget", "missing-file"])(
   "rejects invalid or over-budget extraction and rolls back output: %s",
   async (mode) => {
