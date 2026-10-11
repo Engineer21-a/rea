@@ -58,7 +58,12 @@ export const inspectCall = (
       kind: "dynamic-import",
       specifier: chunkLoad.specifier,
     });
-  for (const specifier of vitePreloadDependencySpecifiers(source, node, name))
+  for (const specifier of vitePreloadDependencySpecifiers(
+    source,
+    node,
+    name,
+    accumulator,
+  ))
     addReference(context, { node, kind: "dynamic-import", specifier });
   if (name === "Worker" || name.endsWith(".Worker"))
     addReference(context, { node, kind: "worker", specifier: first });
@@ -149,6 +154,7 @@ const vitePreloadDependencySpecifiers = (
   source: string,
   node: JavaScriptCallLike,
   name: string,
+  accumulator: AnalysisAccumulator,
 ): readonly string[] => {
   if (name !== "__vite__mapDeps" || !t.isArrayExpression(node.arguments[0]))
     return [];
@@ -156,18 +162,129 @@ const vitePreloadDependencySpecifiers = (
     t.isNumericLiteral(element) ? [element.value] : [],
   );
   if (indexes.length !== node.arguments[0].elements.length) return [];
-  const table = vitePreloadDependencyTable(source);
+  accumulator.vitePreloadDependencyTable ??= vitePreloadDependencyTable(source);
+  const table = accumulator.vitePreloadDependencyTable;
   return indexes.flatMap((index) => table[index] ?? []);
 };
 
+// Each sticky pattern has one deterministic match path whose text holds a
+// single occurrence of its leading token, so trying it at every occurrence of
+// that token stays linear in the source length.
+const VITE_TABLE_GUARD = /\.\s*f\s*\|\|\s*\(/uy;
+const VITE_TABLE_ASSIGNMENT = /\.f\s*=\s*\[/uy;
+const VITE_TABLE_END = /\]\s*\)/uy;
+
+const stickyMatchEnd = (
+  pattern: RegExp,
+  source: string,
+  index: number,
+): number | undefined => {
+  pattern.lastIndex = index;
+  return pattern.test(source) ? pattern.lastIndex : undefined;
+};
+
+/** First `.f = [` assignment at or after `from`, as [start, end after `[`]. */
+const nextVitePreloadAssignment = (
+  source: string,
+  from: number,
+): readonly [number, number] => {
+  for (
+    let start = source.indexOf(".f", from);
+    start !== -1;
+    start = source.indexOf(".f", start + 1)
+  ) {
+    const end = stickyMatchEnd(VITE_TABLE_ASSIGNMENT, source, start);
+    if (end !== undefined) return [start, end];
+  }
+  return [-1, -1];
+};
+
+/**
+ * The leftmost `<x>.f || (<no ")"> .f = [<body>] )` table body, in one
+ * left-to-right pass. Guard ends only increase, so the cached next `)` and next
+ * assignment are recomputed only past their previous positions.
+ */
+const vitePreloadDependencyTableBody = (source: string): string | undefined => {
+  let close = -2;
+  let assignment = -2;
+  let bodyStart = -1;
+  for (
+    let dot = source.indexOf(".");
+    dot !== -1;
+    dot = source.indexOf(".", dot + 1)
+  ) {
+    const guardEnd = stickyMatchEnd(VITE_TABLE_GUARD, source, dot);
+    if (guardEnd === undefined) continue;
+    if (close === -2 || (close !== -1 && close < guardEnd))
+      close = source.indexOf(")", guardEnd);
+    if (assignment === -2 || (assignment !== -1 && assignment < guardEnd))
+      [assignment, bodyStart] = nextVitePreloadAssignment(source, guardEnd);
+    // No assignment follows this guard, so none follows any later guard.
+    if (assignment === -1) return undefined;
+    if (close !== -1 && close < assignment) continue;
+    // The body ends at the first `] )`; without one, no later guard matches.
+    for (
+      let end = source.indexOf("]", bodyStart);
+      end !== -1;
+      end = source.indexOf("]", end + 1)
+    )
+      if (stickyMatchEnd(VITE_TABLE_END, source, end) !== undefined)
+        return source.slice(bodyStart, end);
+    return undefined;
+  }
+  return undefined;
+};
+
+const LINE_TERMINATORS = new Set(["\n", "\r", " ", " "]);
+
+/**
+ * Raw contents of single- and double-quoted literals, scanned left to right.
+ * A quote that never closes also fails for every later same-type quote before
+ * the scan's stopping point, so that span is not rescanned.
+ */
+const quotedLiteralContents = (body: string): string[] => {
+  const literals: string[] = [];
+  const failedBefore = new Map<string, number>();
+  let index = 0;
+  while (index < body.length) {
+    const quote = body[index] ?? "";
+    if (
+      (quote !== '"' && quote !== "'") ||
+      index < (failedBefore.get(quote) ?? 0)
+    ) {
+      index += 1;
+      continue;
+    }
+    let cursor = index + 1;
+    let closed = false;
+    while (cursor < body.length) {
+      const char = body[cursor];
+      if (char === quote) {
+        closed = true;
+        break;
+      }
+      if (char !== "\\") cursor += 1;
+      else if (
+        cursor + 1 < body.length &&
+        !LINE_TERMINATORS.has(body[cursor + 1] ?? "")
+      )
+        cursor += 2;
+      else break;
+    }
+    if (closed) {
+      literals.push(body.slice(index + 1, cursor));
+      index = cursor + 1;
+    } else {
+      failedBefore.set(quote, cursor);
+      index += 1;
+    }
+  }
+  return literals;
+};
+
 const vitePreloadDependencyTable = (source: string): readonly string[] => {
-  const match =
-    /\.\s*f\s*\|\|\s*\(\s*[^)]*?\.f\s*=\s*\[([\s\S]*?)\]\s*\)/u.exec(source);
-  const body = match?.[1];
-  if (body === undefined) return [];
-  return [
-    ...body.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'/gu),
-  ].map((literal) => literal[1] ?? literal[2] ?? "");
+  const body = vitePreloadDependencyTableBody(source);
+  return body === undefined ? [] : quotedLiteralContents(body);
 };
 
 const inspectEndpointCall = (

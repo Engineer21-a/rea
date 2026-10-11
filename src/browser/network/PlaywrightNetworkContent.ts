@@ -30,6 +30,22 @@ const credentialHeaders = new Set([
   "set-cookie",
 ]);
 
+/** Header values that carry transport URLs, matching the HAR and mitmproxy decoders. */
+const transportUrlHeaders = new Set(["location", "referer", "origin"]);
+
+/** Remove leading authority userinfo, a transport credential, from a URL-valued header. */
+const withoutUrlUserinfo = (value: string): string => {
+  // URL parsing skips leading C0 controls and spaces, as CaptureRedaction does.
+  let start = 0;
+  while (start < value.length && value.charCodeAt(start) <= 0x20) start += 1;
+  const match = /^((?:[a-z][a-z0-9+.-]*:)?\/\/)([^/?#]*@)/i.exec(
+    value.slice(start),
+  );
+  return match === null
+    ? value
+    : `${value.slice(0, start)}${match[1]}${value.slice(start + match[0].length)}`;
+};
+
 const errorMessage = (
   cause: unknown,
   secrets: BrowserScenarioSecrets,
@@ -56,10 +72,14 @@ export const captureNetworkHeaders = async (
       state: "captured",
       items: headers.map(({ name, value }) => {
         const safeName = secrets.redact(name);
-        const credential = credentialHeaders.has(name.toLowerCase());
+        const lowerName = name.toLowerCase();
+        const credential = credentialHeaders.has(lowerName);
+        const retained = transportUrlHeaders.has(lowerName)
+          ? withoutUrlUserinfo(value)
+          : value;
         const safeValue = credential
           ? null
-          : secrets.redactBytes(Buffer.from(value)).toString("utf8");
+          : secrets.redactBytes(Buffer.from(retained)).toString("utf8");
         return {
           name: safeName,
           value: safeValue,

@@ -266,7 +266,9 @@ coverage. Response bytes are decoded by the browser, not the compressed wire
 representation. No later fetch is substituted for the original response.
 Headers preserve producer order and duplicates. Authorization,
 Proxy-Authorization, Cookie, and Set-Cookie values are null with
-`redacted: true`; ordinary values remain intact. Declared UTF-8 secret values
+`redacted: true`. URL userinfo in Location, Referer, and Origin values is a
+transport credential and is removed with `redacted: true`; ordinary values
+remain intact. Declared UTF-8 secret values
 and their standard URI/form or JSON-escaped representations are replaced without
 decoding unrelated binary bytes. Other encodings are not interpreted. Digests describe the
 retained representation after redaction.

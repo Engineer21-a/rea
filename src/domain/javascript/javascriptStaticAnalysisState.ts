@@ -51,6 +51,8 @@ export interface JavaScriptAnalysisAccumulator {
   readonly moduleRangeIndex: JavaScriptModuleRangeIndex;
   /** `preload` attributes of audio and video elements, which are not scripts. */
   readonly mediaElementPreloads: WeakSet<t.Node>;
+  /** Vite `__vite__mapDeps` dependency table, scanned at most once per source. */
+  vitePreloadDependencyTable: readonly string[] | undefined;
   readonly seen: Set<string>;
   visitedNodes: number;
   unknownFindings: number;
@@ -117,6 +119,7 @@ export const createJavaScriptAnalysisAccumulator = (
   nativeAddonBindings: [],
   moduleRangeIndex: new JavaScriptModuleRangeIndex(sourceLength),
   mediaElementPreloads: new WeakSet(),
+  vitePreloadDependencyTable: undefined,
   seen: new Set(),
   visitedNodes: 0,
   unknownFindings: 0,

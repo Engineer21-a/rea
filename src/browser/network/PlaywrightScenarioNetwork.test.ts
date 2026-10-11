@@ -320,6 +320,44 @@ it("preserves duplicate headers and binary bytes, redacting credentials and decl
   expect(JSON.stringify(events)).not.toContain("transport-secret");
 });
 
+it("removes URL userinfo from Location, Referer, and Origin header values only", async () => {
+  const { collector, events } = harness();
+  const request = new RequestFixture("input");
+  const response = new ResponseFixture(request, "unused");
+  response.headersArray = async () => [
+    { name: "Location", value: "https://svc:token@internal.example/next" },
+    { name: "referer", value: " \t//user@example.test/page?a@b" },
+    { name: "Origin", value: "https://example.test" },
+    { name: "X-Link", value: "https://other:kept@example.test/" },
+  ];
+  collector.request(request);
+  collector.response(response);
+  collector.finished(request);
+  await collector.finish();
+  const content = events.find(
+    (event) => event.kind === "network-content" && event.phase === "response",
+  );
+  if (content?.kind !== "network-content") throw new Error("Missing response");
+  expect(content.headers).toEqual({
+    state: "captured",
+    items: [
+      {
+        name: "Location",
+        value: "https://internal.example/next",
+        redacted: true,
+      },
+      { name: "referer", value: " \t//example.test/page?a@b", redacted: true },
+      { name: "Origin", value: "https://example.test", redacted: false },
+      {
+        name: "X-Link",
+        value: "https://other:kept@example.test/",
+        redacted: false,
+      },
+    ],
+  });
+  expect(JSON.stringify(events)).not.toContain("svc:token");
+});
+
 it("does not read unfinished streaming responses and reports the cutoff", async () => {
   const { collector, events } = harness();
   const request = new RequestFixture("stream");
