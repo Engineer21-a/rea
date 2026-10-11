@@ -23,6 +23,7 @@ import type {
 import { startProcessSampler } from "./ProcessSampling.js";
 import { snapshotRoots } from "./FilesystemSnapshot.js";
 import { TerminalRenderer } from "./TerminalRenderer.js";
+import { SensitiveEchoRedactor } from "./SensitiveEchoRedactor.js";
 import type { ProcessTimer } from "./ProcessTimer.js";
 import { normalizeProcessText } from "./ProcessNormalization.js";
 import { selectCapturedProcessGroupIds } from "../ProcessOwnershipProcessTree.js";
@@ -79,6 +80,8 @@ interface StartedCaptureRuntime {
   readonly executableIdentity: ReturnType<typeof observeLaunchedExecutable>;
   readonly lastOutput: () => number;
   readonly rawTerminalRetention: () => TerminalRetention;
+  /** Release terminal output held for a possible sensitive echo. */
+  readonly flushTerminalOutput: () => void;
   readonly stopSampler: ReturnType<typeof startProcessSampler>;
   /** Signals the captured root only while its launch-time start identity still matches. */
   readonly signalRoot: (signal: "SIGTERM" | "SIGKILL") => Promise<{
@@ -261,6 +264,7 @@ const startCaptureRuntime = async (
   const { scenario } = options;
   let renderer: TerminalRenderer | undefined;
   let terminal: IPty | undefined;
+  let terminalOutput: ReturnType<typeof captureTerminalFrames> | undefined;
   try {
     const { spawn } = await import("@lydell/node-pty");
     const selectedExecutable = await observeSelectedExecutable(
@@ -292,18 +296,21 @@ const startCaptureRuntime = async (
       scenario.executable,
       selectedExecutable,
     );
-    const rawTerminalRetention = captureTerminalFrames({
+    const redactor = new SensitiveEchoRedactor();
+    terminalOutput = captureTerminalFrames({
       ...options,
       terminal,
       started,
       onOutput: () => (lastOutput = Date.now()),
       renderer,
+      redactor,
     });
     scheduleScenarioInteractions({
       ...options,
       getTerminal: () => terminal,
       renderer,
       started,
+      redactor,
     });
     const stopSampler = startProcessSampler({
       rootPid: terminal.pid,
@@ -320,7 +327,8 @@ const startCaptureRuntime = async (
       startedAt,
       executableIdentity,
       lastOutput: () => lastOutput,
-      rawTerminalRetention,
+      rawTerminalRetention: terminalOutput.retention,
+      flushTerminalOutput: terminalOutput.flush,
       stopSampler,
       signalRoot: retainRootSignaller(
         terminal.pid,
@@ -330,6 +338,7 @@ const startCaptureRuntime = async (
       ),
     };
   } catch (cause: unknown) {
+    terminalOutput?.flush();
     return cleanupFailedStartup({
       cause,
       timers: options.timers,
@@ -518,6 +527,7 @@ const completeCapture = async (options: {
   };
   options.recordEvent("filesystem_checkpoints", 1);
   let renderedFrames: Awaited<ReturnType<TerminalRenderer["frames"]>>;
+  runtime.flushTerminalOutput();
   try {
     renderedFrames = await runtime.renderer.frames();
   } catch (cause: unknown) {
@@ -771,6 +781,7 @@ const runProcessScenario = async (
     });
   } catch (cause: unknown) {
     executionFailure = normalizeCaptureFailure(cause, signal);
+    runtime?.flushTerminalOutput();
     if (
       runtime !== undefined &&
       observations.rendered_frames.state === "unavailable" &&

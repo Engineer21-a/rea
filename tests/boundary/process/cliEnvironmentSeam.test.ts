@@ -12,6 +12,7 @@ import { createDirectAnalysis } from "../../../src/composition/directAnalysis.js
 import { probeProcessCaptureCapability } from "../../../src/process/capture/ProcessCaptureCapability.js";
 import { parseEvidence } from "../../../src/domain/evidence.js";
 import { parseProcessCapture } from "../../../src/domain/process/processCaptureParsing.js";
+import { serveCli } from "../cli/cliServeHarness.js";
 
 describe("the CLI takes its environment as an input", () => {
   it("resolves from injected PATH and inherits injected env with scenario overrides", async ({
@@ -73,4 +74,17 @@ describe("the CLI takes its environment as an input", () => {
     }).runSessionStatus();
     expect(result).toMatchObject({ error: expect.anything() });
   });
+
+  it.each(["not-a-level", ""])(
+    "builds the CLI and serves help when REA_LOG_LEVEL is %j",
+    async (level) => {
+      // Help, setup and doctor must stay usable; analysis commands report the
+      // unsupported value through the configuration error instead.
+      const served = await serveCli(["--help"], { REA_LOG_LEVEL: level });
+      expect(served.exitCode).toBe(0);
+      expect(served.stdout).toContain(
+        "Reverse engineer anything from your terminal or agent.",
+      );
+    },
+  );
 });

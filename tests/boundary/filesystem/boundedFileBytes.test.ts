@@ -39,4 +39,28 @@ describe("bounded file byte reads", () => {
       await handle.close();
     }
   });
+
+  it("reads exactly the expected size and leaves growth to the caller's state check", async () => {
+    const root = await createTestTempDirectory("rea-expected-bytes-");
+    const path = join(root, "input");
+    await writeFile(path, "0123456789");
+    const handle = await open(path, "r");
+    try {
+      const expectedSize = (await handle.stat()).size;
+      await appendFile(path, "abcdefghijklmnopqrstuvwxyz");
+      expect(
+        await readBoundedFileBytes(
+          handle,
+          expectedSize,
+          undefined,
+          expectedSize,
+        ),
+      ).toEqual(Buffer.from("0123456789"));
+      const next = Buffer.alloc(1);
+      expect((await handle.read(next, 0, 1, null)).bytesRead).toBe(1);
+      expect(next.toString()).toBe("a");
+    } finally {
+      await handle.close();
+    }
+  });
 });

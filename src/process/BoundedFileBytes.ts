@@ -1,6 +1,10 @@
 import type { FileHandle } from "node:fs/promises";
 
-/** Read through EOF, returning undefined on overflow; leave the handle open. */
+/**
+ * Read through EOF, returning undefined on overflow; leave the handle open.
+ * With `expectedSize`, read at most that many bytes and return any short read;
+ * callers detect growth by comparing file state before and after the read.
+ */
 export const readBoundedFileBytes = async (
   handle: FileHandle,
   maxBytes: number,
@@ -47,7 +51,6 @@ export const readBoundedFileBytes = async (
     );
     if (bytesRead === 0) return buffer.subarray(0, total);
     total += bytesRead;
-    if (total > maxBytes) return undefined;
     if (total === expectedSize) return buffer;
   }
 };

@@ -7,6 +7,10 @@ import {
 } from "./ProcessNormalization.js";
 import type { TerminalRenderer } from "./TerminalRenderer.js";
 import { scheduleProcessDelay, type ProcessTimer } from "./ProcessTimer.js";
+import {
+  redactedInputPlaceholder,
+  type SensitiveEchoRedactor,
+} from "./SensitiveEchoRedactor.js";
 
 import type {
   InteractionEvent,
@@ -43,6 +47,7 @@ interface ScenarioInteractionOptions {
   readonly started: number;
   readonly dispatchedEventIndexes: Set<number>;
   readonly recordEvent: RecordProcessCaptureEvent;
+  readonly redactor: SensitiveEchoRedactor;
 }
 
 /** Schedule scenario interactions and record each observed dispatch atomically. */
@@ -60,8 +65,11 @@ export const scheduleScenarioInteractions = (
       if (terminal === undefined) outcome = "target_exited";
       else {
         try {
-          if (event.type === "input") terminal.write(event.data);
-          else if (event.type === "resize") {
+          if (event.type === "input") {
+            // Register before writing so the terminal echo is redacted on arrival.
+            if (event.sensitive) options.redactor.addSensitiveInput(event.data);
+            terminal.write(event.data);
+          } else if (event.type === "resize") {
             terminal.resize(event.columns, event.rows);
             renderer.resize(
               event.columns,
@@ -87,7 +95,7 @@ export const scheduleScenarioInteractions = (
         data:
           event.type === "input"
             ? event.sensitive
-              ? `<redacted-input:${String(Buffer.byteLength(event.data))}-bytes>`
+              ? redactedInputPlaceholder(event.data)
               : normalizeProcessText(
                   event.data,
                   scenario,

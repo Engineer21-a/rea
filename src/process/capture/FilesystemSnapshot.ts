@@ -47,6 +47,20 @@ const fileUnavailableSystemCode = (cause: unknown): string | undefined => {
     : undefined;
 };
 
+/**
+ * Recognize an entry that was removed or replaced after its initial lstat.
+ * `readlink` reports EINVAL once the path is no longer a symbolic link.
+ */
+const entryVanishedOrReplaced = (
+  cause: unknown,
+  operation: "readlink" | "directory",
+): boolean =>
+  cause instanceof Error &&
+  "code" in cause &&
+  (cause.code === "ENOENT" ||
+    cause.code === "ENOTDIR" ||
+    (operation === "readlink" && cause.code === "EINVAL"));
+
 const lstatIfPresent = async (path: string): Promise<Stats | undefined> => {
   try {
     return await lstat(path);
@@ -159,6 +173,16 @@ export const snapshotRoots = async (
     FilesystemCoverage["enumeration_reasons"][number]
   >();
   const hashOmissions: FilesystemCoverage["hash_omissions"] = [];
+  const entryChangedDuringRead = (
+    cause: unknown,
+    operation: "readlink" | "directory",
+  ): false => {
+    signal?.throwIfAborted();
+    if (!entryVanishedOrReplaced(cause, operation)) throw cause;
+    truncated = true;
+    enumerationReasons.add("identity_changed");
+    return false;
+  };
   const visit = async (
     root: string,
     rootAlias: string,
@@ -181,8 +205,14 @@ export const snapshotRoots = async (
     if (stats === undefined) return true;
     const relativePath = relative(root, path) || ".";
     if (stats.isSymbolicLink()) {
-      const target = resolve(dirname(path), await readlink(path));
-      const afterRead = await lstat(path);
+      let target: string;
+      let afterRead: Stats;
+      try {
+        target = resolve(dirname(path), await readlink(path));
+        afterRead = await lstat(path);
+      } catch (cause: unknown) {
+        return entryChangedDuringRead(cause, "readlink");
+      }
       if (!hasSameIdentity(stats, afterRead, "symlink")) {
         truncated = true;
         enumerationReasons.add("identity_changed");
@@ -252,25 +282,31 @@ export const snapshotRoots = async (
     let complete = true;
     const remainingEntries =
       scenario.limits.files - entries.length - pendingNames;
-    const directory = await opendir(path);
-    for await (const child of directory) {
-      signal?.throwIfAborted();
-      if (
-        children.length >= remainingEntries ||
-        depth >= scenario.limits.filesystem_depth
-      ) {
-        truncated = true;
-        complete = false;
-        if (children.length >= remainingEntries)
-          enumerationReasons.add("files_limit");
-        if (depth >= scenario.limits.filesystem_depth)
-          enumerationReasons.add("depth_limit");
-        break;
+    let afterRead: Stats;
+    try {
+      const directory = await opendir(path);
+      for await (const child of directory) {
+        signal?.throwIfAborted();
+        if (
+          children.length >= remainingEntries ||
+          depth >= scenario.limits.filesystem_depth
+        ) {
+          truncated = true;
+          complete = false;
+          if (children.length >= remainingEntries)
+            enumerationReasons.add("files_limit");
+          if (depth >= scenario.limits.filesystem_depth)
+            enumerationReasons.add("depth_limit");
+          break;
+        }
+        children.push(child.name);
+        pendingNames += 1;
       }
-      children.push(child.name);
-      pendingNames += 1;
+      afterRead = await lstat(path);
+    } catch (cause: unknown) {
+      pendingNames -= children.length;
+      return entryChangedDuringRead(cause, "directory");
     }
-    const afterRead = await lstat(path);
     if (!hasSameIdentity(stats, afterRead, "directory")) {
       pendingNames -= children.length;
       truncated = true;

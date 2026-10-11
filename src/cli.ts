@@ -53,11 +53,13 @@ export const createCli = (
 ): CliInstance => {
   const environment = snapshotEnvironment(selectedEnvironment);
   const analysis = createDirectAnalysis(environment);
+  // An unsupported REA_LOG_LEVEL must not stop help, setup or doctor from
+  // running; analysis commands report it through the configuration error.
   const logger = createLogger(
     "cli",
     environment.REA_LOG_LEVEL === undefined
       ? "silent"
-      : parseLogLevel(environment.REA_LOG_LEVEL),
+      : (parseLogLevel(environment.REA_LOG_LEVEL) ?? "silent"),
   );
   const cli = Cli.create(PRODUCT_IDENTITY.cliBinary, {
     version: PRODUCT_IDENTITY.packageVersion,

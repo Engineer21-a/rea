@@ -111,6 +111,12 @@ resource limits, and normalization settings have defaults; see
 `processScenarioSchema` for the exact contract. Event times are milliseconds
 from launch, must be ordered, and must fall within `timeout_ms`. Inputs marked
 `sensitive` are sent to the process but persisted as a byte-count placeholder.
+Terminal echo of a dispatched sensitive input is replaced by the same
+placeholder in raw and rendered terminal frames, including line-discipline echo
+forms (CR or LF echoed as a newline, control characters echoed as `^X`); the
+retained-byte accounting describes the redacted output. Output that the target
+derives from the input itself, such as a line editor's redraw or a masked
+prompt, is not recognized as echo.
 Environment overrides are recorded in the scenario commitment; inherited
 values are not copied into Evidence.
 

@@ -24,12 +24,11 @@ const executableAvailable = (path: string): boolean => {
 const defaultHopperLauncherPath = (
   platform: NodeJS.Platform,
   homeDirectory: string,
-  executable: (path: string) => boolean = executableAvailable,
 ): string => {
   if (platform !== "linux") return DEFAULT_HOPPER_LAUNCHER_PATH;
-  if (executable(SYSTEM_LINUX_HOPPER)) return SYSTEM_LINUX_HOPPER;
+  if (executableAvailable(SYSTEM_LINUX_HOPPER)) return SYSTEM_LINUX_HOPPER;
   const userLocal = join(homeDirectory, ".local/share/rea/hopper/bin/Hopper");
-  return executable(userLocal) ? userLocal : SYSTEM_LINUX_HOPPER;
+  return executableAvailable(userLocal) ? userLocal : SYSTEM_LINUX_HOPPER;
 };
 
 /** Parse provider configuration and runtime prerequisites at the composition root. */

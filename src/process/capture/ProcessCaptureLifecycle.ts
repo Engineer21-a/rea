@@ -17,6 +17,7 @@ import { parseProcessCapture } from "../../domain/process/processCaptureParsing.
 import { PRODUCT_IDENTITY } from "../../identity.js";
 import { snapshotRoots } from "./FilesystemSnapshot.js";
 import { classifyFilesystemEffects } from "./ProcessFilesystemEffects.js";
+import type { SensitiveEchoRedactor } from "./SensitiveEchoRedactor.js";
 import {
   cleanupOwnedProcessGroup,
   verifyNoTokenOwnedProcesses,
@@ -1266,12 +1267,20 @@ export const captureTerminalFrames = (options: {
   readonly onOutput: () => void;
   readonly renderer: TerminalRenderer;
   readonly recordEvent: RecordProcessCaptureEvent;
-}): (() => TerminalRetention) => {
+  readonly redactor: SensitiveEchoRedactor;
+}): {
+  /** Release output held for a possible sensitive echo at the end of observation. */
+  readonly flush: () => void;
+  readonly retention: () => TerminalRetention;
+} => {
   let outputBytes = 0;
   let observedBytes = 0;
   let observedFrames = 0;
-  options.terminal.onData((data) => {
-    options.onOutput();
+  let lastAtMs = 0;
+  // Frames, raw_data, and the renderer only ever see redacted output, so byte
+  // accounting and the output budget describe exactly what can be retained.
+  const retain = (data: string, atMs: number): void => {
+    if (data.length === 0) return;
     const bytes = Buffer.byteLength(data);
     observedBytes += bytes;
     observedFrames += 1;
@@ -1279,10 +1288,6 @@ export const captureTerminalFrames = (options: {
       return;
     }
     outputBytes += bytes;
-    const atMs = normalizeProcessElapsedTime(
-      Date.now() - options.started,
-      options.scenario.normalization.time_bucket_ms,
-    );
     const normalized = normalizeProcessText(
       data,
       options.scenario,
@@ -1298,14 +1303,27 @@ export const captureTerminalFrames = (options: {
     });
     options.renderer.write(data, atMs);
     options.recordEvent("frames", sequence);
+  };
+  options.terminal.onData((data) => {
+    options.onOutput();
+    lastAtMs = normalizeProcessElapsedTime(
+      Date.now() - options.started,
+      options.scenario.normalization.time_bucket_ms,
+    );
+    retain(options.redactor.write(data), lastAtMs);
   });
-  return () => ({
-    budget_bytes: options.scenario.limits.output_bytes,
-    observed_bytes: observedBytes,
-    retained_bytes: outputBytes,
-    observed_frames: observedFrames,
-    retained_frames: options.frames.length,
-  });
+  return {
+    flush: () => {
+      retain(options.redactor.flush(), lastAtMs);
+    },
+    retention: () => ({
+      budget_bytes: options.scenario.limits.output_bytes,
+      observed_bytes: observedBytes,
+      retained_bytes: outputBytes,
+      observed_frames: observedFrames,
+      retained_frames: options.frames.length,
+    }),
+  };
 };
 
 export const resolveProcessResult = (
